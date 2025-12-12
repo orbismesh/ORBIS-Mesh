@@ -86,7 +86,7 @@ It shows neighbors, link quality, and network health at a glance — and offers 
 >   ```
 
 ### Step 1 - Download the code
-[Download](https://github.com/audiocustoms/NATAK_Mesh-Experimental/archive/refs/heads/main.zip) the Project as a Zip file. </br>
+[Download](https://github.com/orbismesh/ORBIS-Mesh/archive/refs/heads/main.zip) the Project as a Zip file. </br>
 Do not unpack the Zip on your PC, this might change the file permissions!
 
 ### Step 2 - Upload
@@ -97,26 +97,18 @@ Navigate you your Zip-File location and unzip it
 ```
 unzip <file_name>.zip
 ```
-### Step 4 - Move the folder
-Move the folder with the installation files to it's required destination.
-```
-cd <new_folder_after_unzip>
-mv /move_me /home/natak
-```
-The path to the installation files must be **`/home/natak/move_me`**
-
-### Step 5 — Prepare a Fresh Node
-Navigate to the **`/home/natak/move_me`** folder.</br>
-Run the instrallation script (as user `natak`):
+### Step 4 — Prepare a Fresh Node
+Navigate to the **`/tmp`** folder.</br>
+Run the instrallation script:
 
 ```
 bash fresh_node.sh
 ```
 
 This installs the core dependencies and prepares the environment  
-(e.g., `batman-adv`, `alfred`, `dnsmasq`, `hostapd`, and related tools).
+(e.g., `batman-adv`, `dnsmasq`, `hostapd`, and related tools).
 
-### Step 6 — Activate OrbisMesh
+### Step 5 — Activate OrbisMesh
 Enable and start the services:
 
 ```
@@ -126,8 +118,8 @@ bash service_activator.sh
 This will:
 - Install and enable the required systemd units  
 - Start the mesh monitoring stack  
-- Enable DHCP/bridge/ALFRED helpers  
-- Launch the OrbisMesh web UI
+- Enable DHCP/bridge helpers  
+- Launch the OrbisMesh Web UI
 
 After a reboot (takes about 30-35sec), open:
 
