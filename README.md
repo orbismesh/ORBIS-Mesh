@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="OrbisMesh_Logo_green.png" alt="OrbisMesh Logo" width="500" />
+  <img src="OrbisMesh_Logo_green.svg" alt="OrbisMesh Logo" width="500" />
 </p>
 
 <p align="center"><em>Self-healing mesh networks — visible, understandable, resilient.</em></p>
