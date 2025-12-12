@@ -82,7 +82,7 @@ It shows neighbors, link quality, and network health at a glance — and offers 
 > - An IEEE 802.11s (Mesh) capable WiFi adapter connected to `wlan1`
 
 ### Step 1 - Download the code
-[Download](https://github.com/orbismesh/ORBIS-Mesh/archive/refs/heads/main.zip) the Project as a Zip file. </br>
+Download the Project as a Zip file. </br>
 Do not unpack the Zip on your PC, this might change the file permissions!
 
 ### Step 2 - Upload
