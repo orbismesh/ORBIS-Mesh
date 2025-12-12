@@ -1,0 +1,4 @@
+# /etc/udev/rules.d/98-wlan1-mesh-hotplug.rules
+
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="wlan1", \
+  TAG+="systemd", ENV{SYSTEMD_WANTS}+="mesh-startup.service"
