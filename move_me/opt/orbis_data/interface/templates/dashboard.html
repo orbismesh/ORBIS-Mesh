@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card-grid">
+    <article class="card" id="local-node-card">
+        <h2 class="card-title">Local Node</h2>
+        <ul class="card-list">
+            <li>
+                Local MAC-Address: </br>
+                <span id="local-node-mac" class="mono text-ok">–</span>
+            </li>
+        </ul>
+    </br>
+        <ul class="card-list">
+            <li>
+                <span class="badge local-node-service" data-key="mesh_monitor">–</span>
+                Web Interface
+            </li>
+            <li>
+                <span class="badge local-node-service" data-key="ogm_monitor">–</span>
+                Mesh Network Monitor
+            </li>
+            <li>                
+                <span class="badge local-node-service" data-key="hostapd">–</span>
+                hostapd
+            </li>
+            <li>                
+                <span class="badge local-node-service" data-key="dnsmasq">–</span>
+                dnsmasq
+            </li>
+            <li>                
+                <span class="badge local-node-service" data-key="br0">–</span>
+                br0
+            </li>
+            <li>                
+                <span class="badge local-node-service" data-key="wlan1">–</span>
+                wlan1 Adapter
+            </li>
+            <li>                
+                <span class="badge local-node-service" data-key="eth0">–</span>
+                eth0 Adapter
+            </li>
+        </ul>
+    </article>
+</section>
+
+<section class="card-grid">
+    <article class="card" id="mesh-nodes-card">
+        <h2 class="card-title">Mesh Nodes</h2>
+        <div id="mesh-node-container"></div>
+    </article>
+</section>
+
+{% endblock %}

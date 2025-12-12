@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+    <h2 class="card-title">Allgemeine Einstellungen</h2>
+    <p class="card-text">
+        Diese Seite ist als Platzhalter für spätere Konfigurationsoptionen gedacht.
+        Hier können Sie z. B. Node-Name, Standort, Mesh-Parameter oder andere
+        Einstellungen ergänzen.
+    </p>
+
+    <form class="form form-inline">
+        <div class="form-group">
+            <label for="node_name">Node-Name</label>
+            <input type="text" id="node_name" name="node_name" placeholder="z. B. mesh-node-01">
+        </div>
+        <div class="form-group">
+            <label for="location">Standort</label>
+            <input type="text" id="location" name="location" placeholder="z. B. Dachboden, Halle A">
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn-secondary">Abbrechen</button>
+            <button type="submit" class="btn-primary">Speichern</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

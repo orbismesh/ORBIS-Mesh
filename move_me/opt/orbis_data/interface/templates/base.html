@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <title>{{ page_title or "Orbis Mesh" }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <script defer src="{{ url_for('static', filename='js/main.js') }}"></script>
+</head>
+<body class="layout">
+<header class="topbar">    
+    <div class="topbar-left">
+        <button class="icon-button sidebar-toggle" id="sidebarToggle" aria-label="Menü umschalten">
+            &#9776;
+        </button>
+        <span class="hostname-display">Device: {{ hostname }}</span>
+    </div>
+    <div class="topbar-right">
+        <button class="theme-toggle" id="themeToggle" type="button">
+            <span class="theme-icon theme-icon-light">☀</span>
+            <span class="theme-icon theme-icon-dark">☾</span>
+        </button>
+        <a href="{{ url_for('logout') }}" class="topbar-link">Logout</a>
+    </div>
+</header>
+
+<div class="shell">
+    <aside class="sidebar" id="sidebar">
+        <nav class="sidebar-nav">
+            <div class="sidebar-logo">
+                <img src="{{ url_for('static', filename='img/OrbisMesh_Logo_green.png') }}" alt="Orbis Mesh Logo">
+            </div>
+            <a href="{{ url_for('dashboard') }}"
+               class="sidebar-link {% if active_page == 'dashboard' %}is-active{% endif %}">
+                Dashboard
+            </a>
+            <a href="{{ url_for('settings') }}"
+               class="sidebar-link {% if active_page == 'settings' %}is-active{% endif %}">
+                Settings
+            </a>
+        </nav>
+    </aside>
+
+    <main class="content">
+        <h1 class="page-title">{{ page_title }}</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-container">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}" data-category="{{ category }}">
+                            <span class="flash-message">{{ message }}</span>
+                            {% if category != "success" %}
+                                <button class="flash-close" type="button" aria-label="Hinweis schließen">×</button>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+</body>
+</html>

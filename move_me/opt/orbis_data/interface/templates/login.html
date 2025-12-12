@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <title>Login | {{ branding or "Orbis Mesh" }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Central CSS shared with all pages -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <script defer src="{{ url_for('static', filename='js/main.js') }}"></script>
+</head>
+<body class="login-body">
+    <button class="theme-toggle login-theme-toggle" id="themeToggle" type="button" aria-label="Theme umschalten">
+        <span class="theme-icon theme-icon-light">☀</span>
+        <span class="theme-icon theme-icon-dark">☾</span>
+    </button>
+
+    <div class="login-wrapper">
+        <div class="login-card">
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-container">
+                        {% for category, message in messages %}
+                            <div class="flash flash-{{ category }}" data-category="{{ category }}">
+                                <span class="flash-message">{{ message }}</span>
+                                {% if category != "success" %}
+                                    <button class="flash-close" type="button" aria-label="Hinweis schließen">×</button>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            {% if not password_configured %}
+                <p class="login-subtitle">
+                    Willkommen. Bitte vergeben Sie ein initiales Passwort für den Benutzer <strong>admin</strong>.
+                </p>
+                <form method="post" class="form">
+                    <div class="form-group">
+                        <label for="password">Neues Passwort</label>
+                        <input type="password" id="password" name="password" required autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="password_confirm">Passwort bestätigen</label>
+                        <input type="password" id="password_confirm" name="password_confirm" required autocomplete="new-password">
+                    </div>
+                    <button type="submit" class="btn-primary">Passwort setzen</button>
+                </form>
+            {% else %}
+                <div class="login-logo-container">
+                    <img src="{{ url_for('static', filename='img/OrbisMesh_Logo_green.png') }}"
+                         alt="OrbisMesh Logo"
+                         class="login-logo-large">
+                </div>
+
+                <form method="post" class="form">
+                    <div class="form-group">
+                        <label for="username">Benutzername</label>
+                        <input type="text" id="username" name="username" value="admin" required autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Passwort</label>
+                        <input type="password" id="password" name="password" required autocomplete="current-password">
+                    </div>
+                    <button type="submit" class="btn-primary">Login</button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,13 @@
+[Unit]
+Description=Enhanced OGM Monitor
+After=sys-subsystem-net-devices-bat0.device
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/orbis_data/ogm
+ExecStart=/usr/bin/python3 /opt/orbis_data/ogm/enhanced_ogm_monitor.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

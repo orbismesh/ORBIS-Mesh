@@ -1,0 +1,22 @@
+# same as mesh-startup, could use cleanup. But don't want to mess with currently functional file
+
+[Unit]
+Description=Mesh Monitor Web Interface
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+#User=orbis
+#Group=orbis
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HOME=/opt/orbis_data
+Environment=USER=root
+#Environment=PYTHONPATH=/opt/orbis_data/networktastic
+WorkingDirectory=/opt/orbis_data/interface/
+ExecStart=/opt/orbis_data/interface/start_monitor.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

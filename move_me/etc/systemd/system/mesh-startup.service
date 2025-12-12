@@ -1,0 +1,24 @@
+# /etc/systemd/system/mesh-startup.service
+[Unit]
+Description=Mesh Network and Monitor (startup_sequence.sh wrapper)
+# Depend on the network daemon rather than network-online.target to avoid
+# being blocked by long-running wait-online services. Services that truly
+# require a configured IP should depend on network-online.target explicitly.
+After=local-fs.target systemd-modules-load.service systemd-networkd.service
+Wants=systemd-networkd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Definierter PATH, damit ip/iw/batctl gefunden wird
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Falls /home separat gemountet ist
+WorkingDirectory=/opt/orbis_data
+ExecStart=/opt/orbis_data/network/startup_sequence.sh
+# 60s auf Mesh-Join warten (reduziert von 180s)
+TimeoutStartSec=60
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
