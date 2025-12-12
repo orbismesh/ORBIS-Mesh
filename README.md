@@ -81,19 +81,36 @@ It shows neighbors, link quality, and network health at a glance — and offers 
 > - Debian-based OS (Debian, Ubuntu Server, Raspberry Pi OS, etc.)
 > - An IEEE 802.11s (Mesh) capable WiFi adapter connected to `wlan1`
 
-### Step 1 - Download the code
+### Automated Installation
+Navigate to yout `/tmp` folder and run:
+```
+wget https://github.com/orbismesh/ORBIS-Mesh/releases/download/RELEASE-TAG/move_me.zip && unzip move_me.zip && bash move_me/fresh_node.sh
+```
+For example:
+```
+wget https://github.com/orbismesh/ORBIS-Mesh/releases/download/0.1/move_me.zip && unzip move_me.zip && bash move_me/fresh_node.sh
+```
+If `wget` is not installed on your system run:
+```
+sudo apt-get install wget 
+```
+</br>Once the installation is done, continue with **Step 5**
+
+### Manual Installation
+
+#### Step 1 - Download the code
 Download the Project as a Zip file. </br>
 Do not unpack the Zip on your PC, this might change the file permissions!
 
-### Step 2 - Upload
+#### Step 2 - Upload
 Upload the Zip-File to a destination of your choice on your device. A recommended location would be `/tmp`.
 
-### Step 3 - Unpack
+#### Step 3 - Unpack
 Navigate you your Zip-File location and unzip it
 ```
 unzip <file_name>.zip
 ```
-### Step 4 — Prepare a Fresh Node
+#### Step 4 — Prepare a Fresh Node
 Navigate to the **`/tmp`** folder.</br>
 Run the instrallation script:
 
@@ -104,7 +121,7 @@ bash fresh_node.sh
 This installs the core dependencies and prepares the environment  
 (e.g., `batman-adv`, `dnsmasq`, `hostapd`, and related tools).
 
-### Step 5 — Activate OrbisMesh
+#### Step 5 — Activate OrbisMesh
 Enable and start the services:
 
 ```
