@@ -79,11 +79,7 @@ It shows neighbors, link quality, and network health at a glance — and offers 
 
 > **Requirements**
 > - Debian-based OS (Debian, Ubuntu Server, Raspberry Pi OS, etc.)
-> - The system **username must be `natak`**
-> - The folder **`move_me`** must exist inside the `natak` home directory:
->   ```
->   /home/natak/move_me
->   ```
+> - An IEEE 802.11s (Mesh) capable WiFi adapter connected to `wlan1`
 
 ### Step 1 - Download the code
 [Download](https://github.com/orbismesh/ORBIS-Mesh/archive/refs/heads/main.zip) the Project as a Zip file. </br>
