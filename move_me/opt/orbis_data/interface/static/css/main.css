@@ -207,6 +207,12 @@ body {
     color: #bbf7d0;
 }
 
+.sidebar-sublink {
+    font-size: 0.85rem;
+    padding-left: 1.6rem;
+    opacity: 0.95;
+}
+
 /* -------------------- Content ------------------------------ */
 
 .content {

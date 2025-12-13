@@ -720,6 +720,18 @@ def device_config():
     )
 
 
+@app.route("/device-info")
+@login_required
+def device_info():
+    """Device information / overview page."""
+    return render_template(
+        "device_info.html",
+        branding="Orbis Mesh",
+        page_title="Device Info",
+        active_page="device_info",
+    )
+
+
 @app.route("/device-config/hostname", methods=["POST"])
 @login_required
 def device_config_set_hostname():

@@ -42,6 +42,10 @@
                class="sidebar-link {% if active_page == 'device_config' %}is-active{% endif %}">
                 Device Config
             </a>
+            <a href="{{ url_for('device_info') }}"
+               class="sidebar-link {% if active_page == 'device_info' %}is-active{% endif %}">
+                Device Info
+            </a>
             <a href="{{ url_for('settings') }}"
                class="sidebar-link {% if active_page == 'settings' %}is-active{% endif %}">
                 Settings
