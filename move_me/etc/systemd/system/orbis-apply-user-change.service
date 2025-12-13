@@ -1,0 +1,12 @@
+[Unit]
+Description=Apply pending Orbis user changes
+After=network.target
+Before=multi-user.target
+ConditionPathExists=/etc/orbis_user_pending.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/orbis-apply-user-change.sh
+
+[Install]
+WantedBy=multi-user.target
