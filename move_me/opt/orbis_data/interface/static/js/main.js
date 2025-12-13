@@ -1,6 +1,6 @@
 // Orbis Mesh – zentrales JS
 // - Light/Dark Mode via localStorage
-// - Sidebar Toggle für mobile Layouts
+// - Sidebar toggle for mobile layouts
 
 (function () {
     const STORAGE_KEY = "orbis_theme";
@@ -83,7 +83,7 @@
     }
 
     // --------------------------------------------------------------
-    // Helfer für Mesh-Node-Darstellung
+    // Helper for mesh node rendering
     // --------------------------------------------------------------
 
     function meshGetDbm(node) {
@@ -397,7 +397,7 @@ function createNodeCard(mac, node, timeoutSeconds) {
 
         card.appendChild(details);
 
-        // Footer mit Toggle-Button
+        // Footer with toggle button
         const footer = document.createElement("div");
         footer.className = "mesh-node-footer";
 
@@ -452,7 +452,7 @@ function createNodeCard(mac, node, timeoutSeconds) {
 
             entries.forEach(function ([mac, node]) {
                 const card = createNodeCard(mac, node, timeout);
-                // direkt nach dem Local-Node-Card in den Grid-Container hängen
+                // append directly after the local node card into the grid container
                 container.appendChild(card);
             });
         }
@@ -471,7 +471,7 @@ function createNodeCard(mac, node, timeoutSeconds) {
                     applyMeshNodes(data);
                 })
                 .catch(function () {
-                    // Bei Fehler: vorhandene Node-Cards entfernen
+                    // Bei Error: vorhandene Node-Cards entfernen
                     clearExistingNodeCards();
                 });
         }
@@ -482,6 +482,21 @@ function createNodeCard(mac, node, timeoutSeconds) {
 
 
 
+
+    function initConfirmReboot() {
+        const forms = document.querySelectorAll('form[data-confirm-reboot="true"]');
+        if (!forms.length) return;
+
+        forms.forEach((form) => {
+            form.addEventListener("submit", (ev) => {
+                const msg = "Saving these settings will reboot the system. Continue?";
+                if (!window.confirm(msg)) {
+                    ev.preventDefault();
+                }
+            });
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         initTheme();
         initThemeToggle();
@@ -489,5 +504,6 @@ function createNodeCard(mac, node, timeoutSeconds) {
         initLocalNodeWidget();
         initMeshNodesWidget();
         initFlashMessages();
+        initConfirmReboot();
     });
 })();
