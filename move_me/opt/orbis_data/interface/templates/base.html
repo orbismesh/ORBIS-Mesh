@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" data-theme="dark">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <title>{{ page_title or "Orbis Mesh" }}</title>
@@ -10,7 +10,7 @@
 <body class="layout">
 <header class="topbar">    
     <div class="topbar-left">
-        <button class="icon-button sidebar-toggle" id="sidebarToggle" aria-label="Menü umschalten">
+        <button class="icon-button sidebar-toggle" id="sidebarToggle" aria-label="Toggle menu">
             &#9776;
         </button>
         <span class="hostname-display">Device: {{ hostname }}</span>
@@ -34,6 +34,14 @@
                class="sidebar-link {% if active_page == 'dashboard' %}is-active{% endif %}">
                 Dashboard
             </a>
+            <a href="{{ url_for('local_network') }}"
+               class="sidebar-link {% if active_page == 'local_network' %}is-active{% endif %}">
+                Local Network
+            </a>
+            <a href="{{ url_for('device_config') }}"
+               class="sidebar-link {% if active_page == 'device_config' %}is-active{% endif %}">
+                Device Config
+            </a>
             <a href="{{ url_for('settings') }}"
                class="sidebar-link {% if active_page == 'settings' %}is-active{% endif %}">
                 Settings
@@ -50,7 +58,7 @@
                         <div class="flash flash-{{ category }}" data-category="{{ category }}">
                             <span class="flash-message">{{ message }}</span>
                             {% if category != "success" %}
-                                <button class="flash-close" type="button" aria-label="Hinweis schließen">×</button>
+                                <button class="flash-close" type="button" aria-label="Close notice">×</button>
                             {% endif %}
                         </div>
                     {% endfor %}
