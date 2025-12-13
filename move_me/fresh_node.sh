@@ -183,10 +183,10 @@ run "sudo chmod +x /opt/orbis_data/scripts/manage_wlan2.sh"
 #done
 
 # System directories
-run "sudo install -d /etc/dnsmasq.d /etc/hostapd /etc/modprobe.d /etc/NetworkManager /etc/sudoers.d /etc/sysctl.d /etc/udev /etc/systemd/network /etc/systemd/system /etc/wpa_supplicant /usr/lib/systemd/system"
+run "sudo install -d /etc/dnsmasq.d /etc/hostapd /etc/modprobe.d /etc/NetworkManager /etc/sudoers.d /etc/sysctl.d /etc/udev /etc/systemd/network /etc/systemd/system /etc/wpa_supplicant /usr/lib/systemd/system /usr/local/sbin"
 
 # Concrete copies (only if present)
-for name in etc/dnsmasq.d etc/hostapd etc/modprobe.d etc/NetworkManager etc/sudoers.d etc/sysctl.d etc/udev etc/systemd/network etc/systemd/system etc/wpa_supplicant usr/lib/systemd/system; do
+for name in etc/dnsmasq.d etc/hostapd etc/modprobe.d etc/NetworkManager etc/sudoers.d etc/sysctl.d etc/udev etc/systemd/network etc/systemd/system etc/wpa_supplicant usr/lib/systemd/system usr/local/sbin; do
   if test -d "${MOVE_SRC}/${name}"; then
     # When copying from world-writable locations (e.g. /tmp) avoid
     # preserving original file ownership (which could be a non-root user).
@@ -201,6 +201,8 @@ for name in etc/dnsmasq.d etc/hostapd etc/modprobe.d etc/NetworkManager etc/sudo
     LOG_TS; echo "Skipping: ${MOVE_SRC}/${name} not found."
   fi
 done
+
+run "chmod +x /usr/local/sbin/orbis-apply-user-change.sh"
 
 # -------- Services/Daemons -----------------------------------------------------
 LOG_TS; echo "Enabling/configuring services …"
@@ -223,7 +225,7 @@ read_with_asterisks() {
   printf "%s" "$prompt"
 
   while IFS= read -r -s -n 1 char; do
-    # Wenn nichts gelesen wurde (manche Terminals bei Enter mit -n 1)
+    # If nothing was read (some terminals with Enter under -n 1)
     if [ -z "$char" ]; then
       break
     fi
@@ -232,7 +234,7 @@ read_with_asterisks() {
     ord=$(printf '%d' "'$char")
 
     case "$ord" in
-      10|13)  # 10 = LF, 13 = CR -> Enter (normale Enter-Taste *und* NumPad-Enter)
+      10|13)  # 10 = LF, 13 = CR -> Enter (regular Enter key and NumPad Enter)
         break
         ;;
       8|127) # 8 = Backspace (^H), 127 = DEL
