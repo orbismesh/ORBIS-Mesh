@@ -254,7 +254,7 @@ class EnhancedOGMMonitor:
 
     def read_power_info(self):
         """
-        Erkennt echte Batteriequellen über /sys/class/power_supply/*.
+        Detects real battery sources via /sys/class/power_supply/*.
         Liefert:
         - battery_present: bool
         - battery_pct: 0..100 (nur wenn vorhanden)
@@ -335,7 +335,7 @@ class EnhancedOGMMonitor:
             dirpath = os.path.dirname(self.STATUS_FILE)
             os.makedirs(dirpath, exist_ok=True)
 
-            # eindeutige Temp-Datei im selben Verzeichnis (wichtig fürs atomare replace)
+            # unique temp file in the same directory (important for atomic replace)
             fd, tmppath = tempfile.mkstemp(prefix=".node_status.", suffix=".tmp", dir=dirpath)
             try:
                 with os.fdopen(fd, "w") as f:
@@ -344,7 +344,7 @@ class EnhancedOGMMonitor:
                     os.fsync(f.fileno())
                 os.replace(tmppath, self.STATUS_FILE)   # atomar
             finally:
-                # falls ein Fehler auftrat und tmppath noch existiert: aufräumen
+                # if an error occurred and tmppath still exists: clean up
                 try:
                     if os.path.exists(tmppath):
                         os.unlink(tmppath)
