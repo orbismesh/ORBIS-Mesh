@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" data-theme="dark">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <title>Login | {{ branding or "Orbis Mesh" }}</title>
@@ -24,7 +24,7 @@
                             <div class="flash flash-{{ category }}" data-category="{{ category }}">
                                 <span class="flash-message">{{ message }}</span>
                                 {% if category != "success" %}
-                                    <button class="flash-close" type="button" aria-label="Hinweis schließen">×</button>
+                                    <button class="flash-close" type="button" aria-label="Close notice">×</button>
                                 {% endif %}
                             </div>
                         {% endfor %}
@@ -34,18 +34,18 @@
 
             {% if not password_configured %}
                 <p class="login-subtitle">
-                    Willkommen. Bitte vergeben Sie ein initiales Passwort für den Benutzer <strong>admin</strong>.
+                    Welcome. Please set an initial password for the user <strong>admin</strong>.
                 </p>
                 <form method="post" class="form">
                     <div class="form-group">
-                        <label for="password">Neues Passwort</label>
+                        <label for="password">New password</label>
                         <input type="password" id="password" name="password" required autocomplete="new-password">
                     </div>
                     <div class="form-group">
-                        <label for="password_confirm">Passwort bestätigen</label>
+                        <label for="password_confirm">Confirm password</label>
                         <input type="password" id="password_confirm" name="password_confirm" required autocomplete="new-password">
                     </div>
-                    <button type="submit" class="btn-primary">Passwort setzen</button>
+                    <button type="submit" class="btn-primary">Set Password</button>
                 </form>
             {% else %}
                 <div class="login-logo-container">
