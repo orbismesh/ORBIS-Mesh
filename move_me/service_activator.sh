@@ -46,6 +46,7 @@ sudo systemctl enable systemd-networkd
 
 LOG_TS; echo "Enabling mesh-monitor.service …"
 sudo systemctl enable mesh-monitor.service
+sudo systemctl enable orbis-apply-user-change.service
 
 LOG_TS; echo "Enabling mesh-startup.service …"
 sudo systemctl enable mesh-startup.service
