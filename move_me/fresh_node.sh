@@ -202,7 +202,7 @@ for name in etc/dnsmasq.d etc/hostapd etc/modprobe.d etc/NetworkManager etc/sudo
   fi
 done
 
-run "chmod +x /usr/local/sbin/orbis-apply-user-change.sh"
+run "sudo chmod +x /usr/local/sbin/orbis-apply-user-change.sh"
 
 # -------- Services/Daemons -----------------------------------------------------
 LOG_TS; echo "Enabling/configuring services …"
