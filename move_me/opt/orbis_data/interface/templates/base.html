@@ -34,6 +34,10 @@
                class="sidebar-link {% if active_page == 'dashboard' %}is-active{% endif %}">
                 Dashboard
             </a>
+            <a href="{{ url_for('mesh_config') }}"
+               class="sidebar-link {% if active_page == 'mesh_config' %}is-active{% endif %}">
+                Mesh Config
+            </a>
             <a href="{{ url_for('local_network') }}"
                class="sidebar-link {% if active_page == 'local_network' %}is-active{% endif %}">
                 Local Network
@@ -42,13 +46,17 @@
                class="sidebar-link {% if active_page == 'device_config' %}is-active{% endif %}">
                 Device Config
             </a>
+            <a href="{{ url_for('settings') }}"
+               class="sidebar-link {% if active_page == 'settings' %}is-active{% endif %}">
+                Settings
+            </a>
             <a href="{{ url_for('device_info') }}"
                class="sidebar-link {% if active_page == 'device_info' %}is-active{% endif %}">
                 Device Info
             </a>
-            <a href="{{ url_for('settings') }}"
-               class="sidebar-link {% if active_page == 'settings' %}is-active{% endif %}">
-                Settings
+            <a href="{{ url_for('about') }}"
+               class="sidebar-link {% if active_page == 'about' %}is-active{% endif %}">
+                About
             </a>
         </nav>
     </aside>

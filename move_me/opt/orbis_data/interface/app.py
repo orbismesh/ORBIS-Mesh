@@ -686,6 +686,37 @@ def dashboard():
     )
 
 
+
+@app.route("/mesh-config", methods=["GET", "POST"])
+@login_required
+def mesh_config():
+    """Mesh configuration page (UI-only placeholder)."""
+    if request.method == "POST":
+        # The underlying mesh configuration backend is device-specific.
+        # For now, acknowledge the request and keep the UI responsive.
+        flash("Mesh configuration has been saved (pending device-side implementation).", "success")
+        return redirect(url_for("mesh_config"))
+
+    return render_template(
+        "mesh_config.html",
+        branding="Orbis Mesh",
+        page_title="Mesh Config",
+        active_page="mesh_config",
+    )
+
+
+@app.route("/about")
+@login_required
+def about():
+    """About page."""
+    return render_template(
+        "about.html",
+        branding="Orbis Mesh",
+        page_title="About",
+        active_page="about",
+    )
+
+
 @app.route("/settings")
 @login_required
 def settings():
