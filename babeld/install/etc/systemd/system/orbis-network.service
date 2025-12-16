@@ -1,0 +1,14 @@
+[Unit]
+Description=ORBIS Mesh Network Base Setup (bridge + mesh + IPs)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/orbis/network/orbis-network.sh start
+ExecStop=/opt/orbis/network/orbis-network.sh stop
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

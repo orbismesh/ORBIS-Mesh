@@ -1,0 +1,14 @@
+[Unit]
+Description=ORBIS hostapd (AP on wlan0 bridged to br-ap)
+After=orbis-network.service
+Requires=orbis-network.service
+PartOf=orbis-network.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/hostapd /opt/orbis/network/generated/hostapd.conf
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

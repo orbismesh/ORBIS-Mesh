@@ -1,0 +1,15 @@
+[Unit]
+Description=ORBIS Web Interface (Flask via gunicorn)
+After=network.target orbis-network.service
+Wants=orbis-network.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/orbis/interface
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/local/bin/gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 4 wsgi:app
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
