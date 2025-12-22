@@ -7,7 +7,7 @@ Wants=orbis-network.service
 Type=simple
 WorkingDirectory=/opt/orbis/interface
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/local/bin/gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 4 wsgi:app
+ExecStart=/opt/orbis/interface/run-ui.sh
 Restart=on-failure
 RestartSec=2
 

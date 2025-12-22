@@ -6,7 +6,10 @@ PartOf=orbis-network.service
 
 [Service]
 Type=simple
-ExecStart=/usr/sbin/babeld -I /run/babeld.pid -C /opt/orbis/network/generated/babeld.conf
+## Ensure we do not end up with multiple babeld instances (e.g., from manual debugging
+## runs or a distro-provided babeld.service). Stop/clean before starting our instance.
+ExecStartPre=/bin/sh -c 'pkill -x babeld 2>/dev/null || true; rm -f /run/babeld.pid; ip link show mesh0 >/dev/null 2>&1'
+ExecStart=/usr/sbin/babeld -I /run/babeld.pid -c /opt/orbis/network/generated/babeld.conf
 Restart=on-failure
 RestartSec=2
 

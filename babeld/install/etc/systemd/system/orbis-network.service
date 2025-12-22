@@ -1,7 +1,7 @@
 [Unit]
 Description=ORBIS Mesh Network Base Setup (bridge + mesh + IPs)
-After=network.target
-Wants=network.target
+After=network.target orbis-ssh-ip.service
+Wants=network.target orbis-ssh-ip.service
 
 [Service]
 Type=oneshot

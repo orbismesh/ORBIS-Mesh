@@ -1,0 +1,16 @@
+[Unit]
+Description=ORBIS Early SSH Management IP (failsafe)
+DefaultDependencies=no
+After=local-fs.target
+Wants=sys-subsystem-net-devices-eth0.device
+After=sys-subsystem-net-devices-eth0.device
+Before=network-pre.target network.target ssh.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/orbis/network/orbis-ssh-ip.sh
+TimeoutStartSec=10
+
+[Install]
+WantedBy=multi-user.target

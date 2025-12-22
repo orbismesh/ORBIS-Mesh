@@ -6,6 +6,29 @@ OUTDIR="/opt/orbis/network/generated"
 mkdir -p "$OUTDIR"
 chmod 700 "$OUTDIR"
 
+# Compute a network prefix (e.g. 192.168.200.0/24) from an address + CIDR.
+# babeld expects prefixes, not host addresses.
+calc_prefix() {
+  _addr="$1"; _cidr="$2"
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - <<'PY' "$_addr" "$_cidr"
+import ipaddress, sys
+addr = sys.argv[1]
+cidr = int(sys.argv[2])
+net = ipaddress.ip_network(f"{addr}/{cidr}", strict=False)
+print(str(net.network_address))
+PY
+    return 0
+  fi
+
+  if command -v ipcalc >/dev/null 2>&1; then
+    ipcalc -n "${_addr}/${_cidr}" | awk -F= '/^NETWORK/ {print $2; exit}'
+    return 0
+  fi
+
+  die "Unable to compute LAN prefix (need python3 or ipcalc)."
+}
+
 HOSTAPD_CONF="$OUTDIR/hostapd.conf"
 case "${ORBIS_AP_SEC}" in
   wpa2) AP_KEY_MGMT="WPA-PSK"; SAE="0" ;;
@@ -35,6 +58,12 @@ EOF
 chmod 600 "$HOSTAPD_CONF"
 
 DNSMASQ_CONF="$OUTDIR/dnsmasq.conf"
+
+# DHCP settings: keep defaults if not provided in orbis.conf.
+: "${ORBIS_LAN_DHCP_START:=${ORBIS_LAN_NET%0}50}"
+: "${ORBIS_LAN_DHCP_END:=${ORBIS_LAN_NET%0}199}"
+: "${ORBIS_LAN_DHCP_LEASE:=12h}"
+
 cat >"$DNSMASQ_CONF" <<EOF
 port=0
 bind-interfaces
@@ -86,15 +115,23 @@ esac
 chmod 600 "$WPA_SUPP_CONF"
 
 BABELD_CONF="$OUTDIR/babeld.conf"
-SPLIT="false"
-[ "${ORBIS_BABELD_SPLIT_HORIZON}" = "true" ] && SPLIT="true"
+# babeld.conf: keep syntax compatible with babeld(8) as shipped on Debian/Raspberry Pi OS.
+# babeld expects prefixes (networks), not host addresses.
+LAN_NET="$(calc_prefix "${ORBIS_LAN_ADDR}" "${ORBIS_LAN_CIDR}")"
+
 cat >"$BABELD_CONF" <<EOF
-interface ${ORBIS_MESH_IFACE} type wireless
-redistribute ip ${ORBIS_LAN_ADDR}/${ORBIS_LAN_CIDR}
-protocol port ${ORBIS_BABELD_PORT}
-default enable-timestamps true
-default split-horizon ${SPLIT}
+# ORBIS babeld configuration
+interface ${ORBIS_MESH_IFACE}
+
+# Advertise the local LAN prefix into the mesh
+redistribute ip ${LAN_NET}/${ORBIS_LAN_CIDR}
+
 EOF
-chmod 600 "$BABELD_CONF"
+
+# Optionally advertise a dedicated SSH management host route (eth0 /32), even if it is outside the LAN prefix.
+if [ -n "${ORBIS_SSH_ETH0_ADDR:-}" ]; then
+  echo "redistribute ip ${ORBIS_SSH_ETH0_ADDR}/${ORBIS_SSH_ETH0_CIDR:-32}" >>"$BABELD_CONF"
+fi
+chmod 644 "$BABELD_CONF"
 
 echo "Rendered configs into $OUTDIR"

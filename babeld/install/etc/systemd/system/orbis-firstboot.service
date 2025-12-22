@@ -1,0 +1,11 @@
+[Unit]
+Description=ORBIS First Boot Network Transition
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/orbis/network/orbis-firstboot.sh
+
+[Install]
+WantedBy=multi-user.target

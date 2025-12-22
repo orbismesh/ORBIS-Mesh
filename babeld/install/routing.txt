@@ -1,0 +1,37 @@
+                     (Clients: Phone/Laptop)
+                192.168.(200+n).0/24  via DHCP
+                          |
+                          |  Wi-Fi (AP)
+                          v
+                      [ wlan0 ]
+                     (hostapd AP)
+                          |
+                          |  Layer-2 bridge port
+                          v
++--------------------------------------------------------------+
+|                        Linux Bridge                          |
+|                         [ br-ap ]                            |
+|   IPs auf br-ap:                                             |
+|     192.168.(200+n).1/24      (LAN Gateway für Clients)      |
+|     192.168.(200+n).10/24     (UI-IP)                        |
+|     optional: 192.168.0.(20+n)/24 (SSH/Mgmt, wenn aktiviert) |
+|                                                              |
+|   Bridge Ports:                                              |
+|     - wlan0  (AP)                                            |
+|     - eth0   (LAN-Port; Layer-2 im selben Segment)           |
++--------------------------------------------------------------+
+                          |
+                          |  (Kernel Routing / IP Forwarding)
+                          |  net.ipv4.ip_forward=1
+                          |
+                          v
+                     [ mesh0 ]     <-- 802.11s Mesh Interface
+                      IP: 10.10.n.1/.. 
+                          |
+                          |  over-the-air (wlan1 PHY / USB)
+                          v
+                      [ wlan1 ]     (USB Wi-Fi PHY für mesh0)
+
+Babeld läuft auf mesh0 und verteilt Routen:
+- announced: 192.168.(200+n).0/24 (LAN Prefix)
+- learns:    192.168.(200+other).0/24 via 10.10.other.1
