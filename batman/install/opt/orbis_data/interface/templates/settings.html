@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+    <h2 class="card-title">General Settings</h2>
+    <p class="card-text">
+        This page is intended as a placeholder for future configuration options.
+        Here you can add, for example, node name, location, mesh parameters, or other
+        settings.
+    </p>
+
+    <form class="form form-inline">
+        <div class="form-group">
+            <label for="node_name">Node-Name</label>
+            <input type="text" id="node_name" name="node_name" placeholder="z. B. mesh-node-01">
+        </div>
+        <div class="form-group">
+            <label for="location">Standort</label>
+            <input type="text" id="location" name="location" placeholder="z. B. Dachboden, Halle A">
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn-secondary">Abbrechen</button>
+            <button type="submit" class="btn-primary">Save</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

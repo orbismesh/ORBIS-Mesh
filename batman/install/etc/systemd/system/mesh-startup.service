@@ -1,0 +1,21 @@
+# /etc/systemd/system/mesh-startup.service
+
+[Unit]
+Description=Mesh Network and Monitor (startup_sequence.sh wrapper)
+After=local-fs.target systemd-modules-load.service systemd-networkd.service sys-subsystem-net-devices-wlan1.device
+Wants=systemd-networkd.service
+BindsTo=sys-subsystem-net-devices-wlan1.device
+ConditionPathExists=/sys/class/net/wlan1
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+WorkingDirectory=/opt/orbis_data
+ExecStart=/opt/orbis_data/network/startup_sequence.sh
+TimeoutStartSec=60
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

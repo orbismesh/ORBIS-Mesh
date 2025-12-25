@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card-grid">
+    <h2 class="card-grid-title">Settings</h2>
+
+    <article class="card">
+        <h2 class="card-title">Host</h2>
+
+        <p>
+            Current Hostname:
+            <span class="mono text-ok">{{ current_hostname }}</span>
+        </p>
+
+        <form class="form form-inline" method="post" action="{{ url_for('device_config_set_hostname') }}">
+            <div class="form-group">
+                <label for="hostname">New Hostname</label>
+                <input type="text" id="hostname" name="hostname" placeholder="e.g. orbis-node-01" required>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Save</button>
+            </div>
+        </form>
+
+        <p>
+            Current Timezone:
+            <span class="mono text-ok">{{ current_timezone }}</span>
+        </p>
+
+        <form class="form form-inline" method="post" action="{{ url_for('device_config_set_timezone') }}">
+            <div class="form-group">
+                <label for="timezone">Timezone</label>
+                <select id="timezone" name="timezone" required>
+                    {% for tz in available_timezones %}
+                        <option value="{{ tz }}" {% if tz == current_timezone %}selected{% endif %}>{{ tz }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Save</button>
+            </div>
+        </form>
+    </article>
+
+    <article class="card">
+    <h2 class="card-title">User</h2>
+
+    <p>
+        Current Username:
+        <span class="mono text-ok">{{ current_username }}</span>
+    </p>
+
+    {% if user_change_pending %}
+    <p>
+        Change pending since
+        <span class="mono text-ok">{{ user_change_pending_since }}</span>.
+        (Will be applied on reboot.)
+    </p>
+
+    <form class="form form-inline" method="post" action="{{ url_for('device_config_apply_user_change') }}">
+        <div class="form-actions">
+            <button type="submit" onclick="return confirm('Saving these settings will reboot the system. Continue?');" class="btn-primary">Apply &amp; Reboot now</button>
+            <button type="submit" class="btn-secondary" formaction="{{ url_for('device_config_discard_user_change') }}">Discard Changes</button>
+        </div>
+    </form>
+
+    <hr class="sep">
+    {% endif %}
+
+    <form class="form form-inline" method="post" action="{{ url_for('device_config_set_user') }}">
+        <div class="form-group">
+            <label for="username">New Username</label>
+            <input type="text" id="username" name="username" placeholder="e.g. orbis" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+            <label for="password">New Password</label>
+            <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="new-password">
+        </div>
+
+        <div class="form-group">
+            <label for="password_confirm">Confirm Password</label>
+            <input type="password" id="password_confirm" name="password_confirm" placeholder="••••••••" autocomplete="new-password">
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">Save</button>
+        </div>
+    </form>
+</article>
+</section>
+{% endblock %}

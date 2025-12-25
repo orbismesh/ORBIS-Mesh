@@ -1,0 +1,12 @@
+[Unit]
+Description=Disable WiFi Power Save on wlan0 and wlan1
+After=sys-subsystem-net-devices-wlan0.device
+Before=hostapd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/iw dev wlan0 set power_save off
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

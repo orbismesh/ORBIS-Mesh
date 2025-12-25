@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card-grid">
+    <h2 class="card-grid-title">Mesh Configuration</h2>
+
+    <article class="card">
+        <h2 class="card-title">Mesh Parameters</h2>
+        <p class="muted">
+            PLACEHOLDER</br>
+            Configure mesh-wide parameters and node behavior. Changes may require a service restart or reboot,
+            depending on the underlying device implementation.
+        </p>
+
+        <form class="form" method="post" action="{{ url_for('mesh_config') }}" data-confirm-reboot="true">
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label for="mesh_id">Mesh ID / Network Name</label>
+                    <input id="mesh_id" name="mesh_id" type="text" placeholder="e.g. orbis-mesh-prod" autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="mesh_channel">Channel</label>
+                    <input id="mesh_channel" name="mesh_channel" type="number" min="1" max="165" placeholder="e.g. 36">
+                </div>
+            </div>
+
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label for="mesh_security">Security Mode</label>
+                    <select id="mesh_security" name="mesh_security">
+                        <option value="open">Open</option>
+                        <option value="wpa2">WPA2-PSK</option>
+                        <option value="wpa3">WPA3-SAE</option>
+                        <option value="mixed">WPA2/WPA3 Mixed</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="mesh_passphrase">Passphrase</label>
+                    <input id="mesh_passphrase" name="mesh_passphrase" type="password" placeholder="(optional)" autocomplete="new-password">
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Save</button>
+            </div>
+        </form>
+    </article>
+
+</section>
+
+{% endblock %}

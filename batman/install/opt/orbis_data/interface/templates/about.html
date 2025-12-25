@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card-grid">
+    <h2 class="card-grid-title">About</h2>
+
+    <article class="card">
+        <h2 class="card-title">Orbis Mesh – Web Interface</h2>
+        <p>
+            This web interface provides a lightweight configuration and monitoring frontend for Orbis Mesh devices.
+            It reuses the same layout primitives (cards, grids, forms, badges) as the other configuration pages to stay
+            consistent and easy to operate.
+        </p>
+
+        <ul class="card-list">
+            <li>
+                UI Theme:
+                <span class="mono text-ok">Light/Dark</span>
+                <span class="muted">via the header toggle</span>
+            </li>
+            <li>
+                Live Status Widgets:
+                <span class="mono text-ok">Local Node</span>,
+                <span class="mono text-ok">Mesh Nodes</span>
+            </li>
+        </ul>
+    </article>
+
+    <article class="card">
+        <h2 class="card-title">Support</h2>
+        <p class="muted">
+            If you are operating this device in a managed environment, follow your internal support and change
+            management process. For field deployments, ensure you have physical access before applying network changes.
+        </p>
+
+        <div class="form-actions">
+            <a class="btn-secondary" href="{{ url_for('settings') }}">Open Settings</a>
+            <a class="btn-secondary" href="{{ url_for('device_info') }}">Open Device Info</a>
+        </div>
+    </article>
+
+    <article class="card">
+        <h2 class="card-title">Legal &amp; Credits</h2>
+        <p class="muted">
+            Third-party components may be used by the underlying system (network stack, drivers, services).
+            Refer to your distribution and device image documentation for applicable licenses.
+        </p>
+    </article>
+</section>
+{% endblock %}
