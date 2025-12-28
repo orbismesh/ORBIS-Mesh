@@ -31,6 +31,22 @@
                     </div>
                 {% endif %}
             {% endwith %}
+<div class="login-nodeinfo">
+    <div class="login-nodeinfo-row">
+        <div class="login-nodeinfo-label">Hostname</div>
+        <div class="login-nodeinfo-value">{{ hostname }}</div>
+    </div>
+    <div class="login-nodeinfo-row">
+        <div class="login-nodeinfo-label">Node IP</div>
+        <div class="login-nodeinfo-value">{{ NODE_IP }}</div>
+    </div>
+    <div class="login-nodeinfo-row">
+        <div class="login-nodeinfo-label">SSH</div>
+        <div class="login-nodeinfo-value">{{ SSH_IP }}</div>
+    </div>
+</div>
+
+
 
             {% if not password_configured %}
                 <p class="login-subtitle">
@@ -49,7 +65,7 @@
                 </form>
             {% else %}
                 <div class="login-logo-container">
-                    <img src="{{ url_for('static', filename='img/OrbisMesh_Logo_green.png') }}"
+                    <img src="{{ url_for('static', filename='img/OrbisMesh_Logo_green.svg') }}"
                          alt="OrbisMesh Logo"
                          class="login-logo-large">
                 </div>

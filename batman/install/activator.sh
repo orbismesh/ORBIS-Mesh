@@ -17,15 +17,7 @@ LOG_TS() { printf '[%s] ' "$(date '+%F %T')"; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MOVE_SRC="${MOVE_SRC:-${SCRIPT_DIR}}"
 
-# -------- Confirmation ---------------------------------------------------------
-read -r -p "This script will enable and activate all required services for Orbis Mesh and reboot your system. Do you want to continue? [y/N] " ans
-case "$ans" in
-  [Yy]*) echo "Proceeding with post-setup...";;
-  *) echo "Aborted."; exit 1;;
-esac
-
-
-
+# -------- Post-setup tasks -----------------------------------------------------
 LOG_TS; echo "Starting post-setup tasks …"
 
 # 1. Copy unmanaged.conf
@@ -74,8 +66,7 @@ echo
 read -r -p "Reboot now? [y/N] " reboot_ans
 case "$reboot_ans" in
   [Yy]*)
-    LOG_TS; echo "Rebooting in 5 seconds …"
-    sleep 5
+    LOG_TS; echo "Rebooting"
     sudo reboot
     ;;
   *)

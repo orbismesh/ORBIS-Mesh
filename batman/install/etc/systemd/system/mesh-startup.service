@@ -2,8 +2,8 @@
 
 [Unit]
 Description=Mesh Network and Monitor (startup_sequence.sh wrapper)
-After=local-fs.target systemd-modules-load.service systemd-networkd.service sys-subsystem-net-devices-wlan1.device
-Wants=systemd-networkd.service
+After=local-fs.target systemd-modules-load.service systemd-networkd.service sys-subsystem-net-devices-wlan1.device orbis-networkd-generate.service
+Wants=systemd-networkd.service orbis-networkd-generate.service
 BindsTo=sys-subsystem-net-devices-wlan1.device
 ConditionPathExists=/sys/class/net/wlan1
 

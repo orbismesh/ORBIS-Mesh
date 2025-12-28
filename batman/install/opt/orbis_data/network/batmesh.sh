@@ -64,15 +64,31 @@ batctl if add "${IF}" 2>/dev/null || true
 batctl dat 1
 batctl ap_isolation 0
 
-# Optional: bat0 to br0 join, if bridge exists
+# Optional: bat0 to br0 join, if bridge is existing
 if ip link show "${BRIDGE_NAME}" >/dev/null 2>&1; then
   log "[bridge] join bat0 in ${BRIDGE_NAME}"
   ip link set "${BRIDGE_NAME}" up || true
   ip link set dev bat0 master "${BRIDGE_NAME}" || true
 fi
 
-# Optional: wait for peer (informational)
+# Optional: wait for peer (just info)
 log "[wait] wait for ${WAIT_PEER}s mesh-peer"
 for i in $(seq "${WAIT_PEER}"); do
   if iw dev "${IF}" station dump | grep -q "^Station "; then
-    log "[ok] mi
+    log "[ok] minimum one mesh-peer available"
+    break
+  fi
+  sleep 1
+done
+
+# Status (not critical)
+log "[status] Interface:"
+iw dev "${IF}" info | egrep -i 'type|channel|addr' || true
+log "[status] Peers:"
+iw dev "${IF}" station dump | sed -n '1,30p' || true
+log "[status] batman-adv Nachbarn/Originators:"
+batctl n || true
+batctl o || true
+
+log "[done] batmesh.sh erfolgreich abgeschlossen"
+exit 0

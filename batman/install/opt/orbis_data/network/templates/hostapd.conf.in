@@ -1,0 +1,13 @@
+interface=wlan0
+bridge=br0
+ssid=@LOCAL_SSID@
+country_code=@COUNTRY@
+hw_mode=g
+channel=@LOCAL_CH@
+auth_algs=1
+ieee80211n=1
+wmm_enabled=1
+wpa=2
+wpa_passphrase=@WPA_PASSPHRASE@
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP

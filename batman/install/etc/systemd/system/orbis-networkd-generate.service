@@ -1,0 +1,11 @@
+[Unit]
+Description=Generate networkd config from /opt/orbis_data/orbis.conf
+Before=systemd-networkd.service mesh-startup.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/orbis_data/network/generate_networkd.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

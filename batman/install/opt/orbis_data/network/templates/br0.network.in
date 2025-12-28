@@ -3,15 +3,15 @@ Name=br0
 
 [Network]
 # EUD / Mesh LAN
-Address=192.168.200.10/24
+Address=@NODE_IP@/@NODE_CIDR@
 
 # Management / SSH / Uplink
-Address=192.168.0.21/24
+Address=@SSH_IP@/@SSH_CIDR@
 
 # Default Route to Router-Net
-Gateway=192.168.0.1
+Gateway=@GATEWAY@
 
-DNS=192.168.0.1
+DNS=@DNS@
 
 IPForward=yes
 IPMasquerade=ipv4

@@ -23,6 +23,43 @@ from pathlib import Path
 from functools import wraps
 from typing import Optional
 
+
+import time
+import threading
+# ---------------------------------------------------------------------------
+# Orbis configuration helpers
+# ---------------------------------------------------------------------------
+
+ORBIS_CONF_CANDIDATES = (
+    "/opt/orbis_data/orbis.conf",
+    "/opt/orbis_data/network/orbis.conf",  # legacy/alternate location
+)
+
+def _load_orbis_conf() -> dict:
+    """Load KEY=VALUE pairs from orbis.conf (shell-compatible).
+
+    Returns an empty dict if the file is missing or unreadable.
+    """
+    for path in ORBIS_CONF_CANDIDATES:
+        try:
+            if not os.path.exists(path):
+                continue
+            conf = {}
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                for raw in f:
+                    line = raw.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "#" in line:
+                        line = line.split("#", 1)[0].strip()
+                    if "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    conf[k.strip()] = v.strip().strip('"').strip("'")
+            return conf
+        except Exception:
+            continue
+    return {}
 PENDING_USER_FILE = Path('/etc/orbis_user_pending.json')
 ISO_COUNTRY_CODES = ['AF', 'AX', 'AL', 'DZ', 'AS', 'AD', 'AO', 'AI', 'AQ', 'AG', 'AR', 'AM', 'AW', 'AU', 'AT', 'AZ', 'BS', 'BH', 'BD', 'BB', 'BY', 'BE', 'BZ', 'BJ', 'BM', 'BT', 'BO', 'BQ', 'BA', 'BW', 'BV', 'BR', 'IO', 'BN', 'BG', 'BF', 'BI', 'CV', 'KH', 'CM', 'CA', 'KY', 'CF', 'TD', 'CL', 'CN', 'CX', 'CC', 'CO', 'KM', 'CG', 'CD', 'CK', 'CR', 'CI', 'HR', 'CU', 'CW', 'CY', 'CZ', 'DK', 'DJ', 'DM', 'DO', 'EC', 'EG', 'SV', 'GQ', 'ER', 'EE', 'SZ', 'ET', 'FK', 'FO', 'FJ', 'FI', 'FR', 'GF', 'PF', 'TF', 'GA', 'GM', 'GE', 'DE', 'GH', 'GI', 'GR', 'GL', 'GD', 'GP', 'GU', 'GT', 'GG', 'GN', 'GW', 'GY', 'HT', 'HM', 'VA', 'HN', 'HK', 'HU', 'IS', 'IN', 'ID', 'IR', 'IQ', 'IE', 'IM', 'IL', 'IT', 'JM', 'JP', 'JE', 'JO', 'KZ', 'KE', 'KI', 'KP', 'KR', 'KW', 'KG', 'LA', 'LV', 'LB', 'LS', 'LR', 'LY', 'LI', 'LT', 'LU', 'MO', 'MG', 'MW', 'MY', 'MV', 'ML', 'MT', 'MH', 'MQ', 'MR', 'MU', 'YT', 'MX', 'FM', 'MD', 'MC', 'MN', 'ME', 'MS', 'MA', 'MZ', 'MM', 'NA', 'NR', 'NP', 'NL', 'NC', 'NZ', 'NI', 'NE', 'NG', 'NU', 'NF', 'MK', 'MP', 'NO', 'OM', 'PK', 'PW', 'PS', 'PA', 'PG', 'PY', 'PE', 'PH', 'PN', 'PL', 'PT', 'PR', 'QA', 'RE', 'RO', 'RU', 'RW', 'BL', 'SH', 'KN', 'LC', 'MF', 'PM', 'VC', 'WS', 'SM', 'ST', 'SA', 'SN', 'RS', 'SC', 'SL', 'SG', 'SX', 'SK', 'SI', 'SB', 'SO', 'ZA', 'GS', 'SS', 'ES', 'LK', 'SD', 'SR', 'SJ', 'SE', 'CH', 'SY', 'TW', 'TJ', 'TZ', 'TH', 'TL', 'TG', 'TK', 'TO', 'TT', 'TN', 'TR', 'TM', 'TC', 'TV', 'UG', 'UA', 'AE', 'GB', 'US', 'UM', 'UY', 'UZ', 'VU', 'VE', 'VN', 'VG', 'VI', 'WF', 'EH', 'YE', 'ZM', 'ZW']
 
@@ -499,6 +536,45 @@ def _check_interface_up(ifname: str):
 
 
 
+# ---------------------------------------------------------------------------
+# Uplink reachability cache (to avoid running connectivity probes too frequently)
+# ---------------------------------------------------------------------------
+_UPLINK_CACHE_TTL_SECONDS = 5.0
+_uplink_cache_lock = threading.Lock()
+_uplink_cache_last_check_ts = 0.0
+_uplink_cache_last_result = False
+
+def _get_uplink_ok_cached() -> bool:
+    """Return cached uplink status; refresh at most every _UPLINK_CACHE_TTL_SECONDS."""
+    global _uplink_cache_last_check_ts, _uplink_cache_last_result
+    now = time.monotonic()
+    with _uplink_cache_lock:
+        if (now - _uplink_cache_last_check_ts) < _UPLINK_CACHE_TTL_SECONDS:
+            return _uplink_cache_last_result
+        _uplink_cache_last_check_ts = now
+        _uplink_cache_last_result = _check_uplink_ok()
+        return _uplink_cache_last_result
+def _check_uplink_ok(timeout_seconds: float = 1.5) -> bool:
+    """Return True if outbound connectivity is available via any interface.
+
+    This is intentionally interface-agnostic: if the kernel can route traffic
+    (mesh, eth0, etc.) to the public internet, this returns True.
+    """
+    targets = [
+        ("1.1.1.1", 443),  # Cloudflare
+        ("8.8.8.8", 53),   # Google DNS
+        ("9.9.9.9", 53),   # Quad9 DNS
+    ]
+    for host, port in targets:
+        try:
+            sock = socket.create_connection((host, port), timeout=timeout_seconds)
+            sock.close()
+            return True
+        except OSError:
+            continue
+    return False
+
+
 # -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
@@ -609,6 +685,14 @@ def inject_hostname():
     return dict(hostname=socket.gethostname())
 
 @app.context_processor
+def inject_node_ips():
+    conf = _load_orbis_conf()
+    return {
+        "NODE_IP": conf.get("NODE_IP", ""),
+        "SSH_IP": conf.get("SSH_IP", ""),
+    }
+
+@app.context_processor
 def inject_country_codes():
     # Provide ISO country codes globally for all templates/pages.
     return {
@@ -652,6 +736,7 @@ def api_local_node():
         "br0": _check_interface_up("br0"),
         "wlan1": _check_interface_up("wlan1"),
         "eth0": _check_interface_up("eth0"),
+        "uplink": _get_uplink_ok_cached(),
     }
 
     return jsonify(

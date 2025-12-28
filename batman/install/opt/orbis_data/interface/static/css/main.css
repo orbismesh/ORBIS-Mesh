@@ -774,3 +774,32 @@ html[data-theme="dark"] .theme-icon-dark {
     position: relative;
     z-index: 1;
 }
+
+.login-nodeinfo {
+    margin: 0.5rem 0 1.25rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.35);
+    font-size: 0.85rem;
+    line-height: 1.35;
+    color: rgba(249, 250, 251, 0.9);
+}
+
+.login-nodeinfo-label {
+    color: var(--muted);
+    margin-right: 0.35rem;
+    font-weight: 600;
+}
+
+.login-nodeinfo-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.login-nodeinfo-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
