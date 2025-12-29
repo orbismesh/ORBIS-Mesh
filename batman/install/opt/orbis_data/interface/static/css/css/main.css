@@ -78,22 +78,19 @@ body {
 
 .topbar {
     height: 56px;
-    min-height: 56px;
-    max-height: 56px;
-    box-sizing: border-box;
     padding: 0 1.25rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    background: rgba(15, 23, 42, 0.96);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+    color: #f9fafb;
     position: sticky;
     top: 0;
     z-index: 40;
-    backdrop-filter: blur(10px);
-    background: rgba(15, 23, 42, 0.96);
-    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-    overflow: hidden; /* hard clamp: prevents any child from making bar look taller */
+    overflow: hidden;
+    backdrop-filter: blur(16px);
 }
-
 
 .topbar-left {
     display: flex;
@@ -820,28 +817,4 @@ html[data-theme="dark"] .theme-icon-dark {
     gap: 0.5rem;
     align-items: center;
     margin-bottom: 0.25rem;
-}
-
-
-/* ---------------------------------------------------------------------------
-   Topbar: prevent wrapping and keep visual height stable (independent of scrollbars)
---------------------------------------------------------------------------- */
-.topbar-left,
-.topbar-right {
-    white-space: nowrap;
-    min-width: 0;
-}
-
-.hostname-display {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: block;
-    max-width: 60vw;
-}
-
-/* Keep viewport width stable even when a vertical scrollbar appears */
-html {
-    overflow-y: scroll;
-    scrollbar-gutter: stable;
 }

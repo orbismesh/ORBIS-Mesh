@@ -980,6 +980,25 @@ AUTH_FILE = os.path.join(BASE_DIR, "auth.json")
 
 app = Flask(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Static asset cache-busting (prevents stale CSS/JS across pages)
+# ---------------------------------------------------------------------------
+_STATIC_ROOT = Path(__file__).resolve().parent / "static"
+
+def _asset_mtime(rel_path: str) -> int:
+    try:
+        return int(os.path.getmtime(_STATIC_ROOT / rel_path))
+    except Exception:
+        return 0
+
+@app.context_processor
+def inject_asset_versions():
+    return {
+        "asset_v_css": _asset_mtime("css/main.css"),
+        "asset_v_js": _asset_mtime("js/main.js"),
+    }
+
 # IMPORTANT:
 # Replace this with a persistent, secret value in production.
 # Example:
