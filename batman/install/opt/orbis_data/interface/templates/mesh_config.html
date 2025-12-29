@@ -5,40 +5,289 @@
     <h2 class="card-grid-title">Mesh Configuration</h2>
 
     <article class="card">
-        <h2 class="card-title">Mesh Parameters</h2>
+        <h2 class="card-title">Identity</h2>
         <p class="muted">
-            PLACEHOLDER</br>
-            Configure mesh-wide parameters and node behavior. Changes may require a service restart or reboot,
-            depending on the underlying device implementation.
-        </p>
 
-        <form class="form" method="post" action="{{ url_for('mesh_config') }}" data-confirm-reboot="true">
+        <form class="form" method="post" action="{{ url_for('mesh_config') }}">
+            <input type="hidden" name="action" value="save_identity">
+
             <div class="form-grid-2">
                 <div class="form-group">
-                    <label for="mesh_id">Mesh ID / Network Name</label>
-                    <input id="mesh_id" name="mesh_id" type="text" placeholder="e.g. orbis-mesh-prod" autocomplete="off">
+                    <p>
+                        Current Node Name:
+                        <span class="mono text-ok">{{ current_node_name or "—" }}</span>
+                    </p>
+                    <label for="new_node_name">New Node Name</label>
+                    <input id="new_node_name" name="new_node_name" type="text" placeholder="e.g. Node 1" autocomplete="off">
                 </div>
 
                 <div class="form-group">
-                    <label for="mesh_channel">Channel</label>
-                    <input id="mesh_channel" name="mesh_channel" type="number" min="1" max="165" placeholder="e.g. 36">
+                    <p>
+                        Current Node ID:
+                        <span class="mono text-ok">{{ current_node_id or "—" }}</span>
+                    </p>
+                    <label for="new_node_id">New Node ID</label>
+                    <input id="new_node_id" name="new_node_id" type="number" min="1" step="1" placeholder="e.g. 1">
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Save</button>
+            </div>
+        </form>
+    </article>
+
+    <article class="card">
+        <h2 class="card-title">Mesh Adapter</h2>
+
+        <form class="form" method="post" action="{{ url_for('mesh_config') }}" onsubmit="return window.confirm('This triggers a network services reboot. Continue?');">
+            <input type="hidden" name="action" value="save_mesh_adapter">
+            <input type="hidden" id="mesh_country_code_live" name="mesh_country_code_live" value="{{ current_country_code }}">
+
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <p>
+                        Current Adapter:
+                        <span class="mono text-ok">{{ current_mesh_if or "—" }}</span>
+                    </p>
+                    <label for="mesh_adapter_1">Adapter 1</label>
+                    <select id="mesh_adapter_1" name="mesh_adapter_1" required>
+                        <option value="" disabled selected>Loading…</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <p>
+                        Current Frq:
+                        <span class="mono text-ok">{{ current_mesh_frequency1 or "—" }}{% if current_mesh_frequency1 %} MHz{% endif %}</span>
+                    </p>
+                    <label for="mesh_channel_1">Channel</label>
+                    <select id="mesh_channel_1" name="mesh_channel_1" required>
+                        <option value="" disabled selected>Select adapter first…</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">Save</button>
+            </div>
+        </form>
+
+        <script>
+            window.addEventListener('DOMContentLoaded', function () {
+                const adapterSel = document.getElementById('mesh_adapter_1');
+                const channelSel = document.getElementById('mesh_channel_1');
+                const countryLive = document.getElementById('mesh_country_code_live');
+                const hint = document.getElementById('mesh_channel_hint');
+
+                function countrySel() {
+                    // The Country Code select is rendered later in the page, so we look it up dynamically.
+                    return document.getElementById('mesh_country_code');
+                }
+
+                function getCountry() {
+                    const cs = countrySel();
+                    const v = (cs && cs.value) ? cs.value : (countryLive ? (countryLive.value || '') : '');
+                    return (v || '').toUpperCase();
+                }
+
+                function setHint(text) {
+                    if (!hint) return;
+                    hint.textContent = text || '';
+                }
+
+                function resetChannels(placeholder) {
+                    if (!channelSel) return;
+                    channelSel.innerHTML = '';
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.disabled = true;
+                    opt.selected = true;
+                    opt.textContent = placeholder || 'Select adapter first…';
+                    channelSel.appendChild(opt);
+                }
+
+                async function loadAdapters() {
+                    try {
+                        const r = await fetch('/api/mesh-adapters', { credentials: 'same-origin' });
+                        const data = await r.json();
+                        adapterSel.innerHTML = '';
+
+                        const ph = document.createElement('option');
+                        ph.value = '';
+                        ph.disabled = true;
+                        ph.selected = true;
+                        ph.textContent = 'Select adapter…';
+                        adapterSel.appendChild(ph);
+
+                        const adapters = (data && data.adapters) ? data.adapters : [];
+                        const current = (data && data.current_if) ? data.current_if : ("{{ current_mesh_if or '' }}");
+
+                        for (const a of adapters) {
+                            const opt = document.createElement('option');
+                            opt.value = a.ifname;
+                            const bands = (a.bands && a.bands.length) ? ` [${a.bands.join('/')}]` : '';
+                            let label = `${a.ifname} (${a.description || 'Wi-Fi adapter'})${bands}`;
+                            if (!a.mesh_supported) {
+                                label += ' — Does not support mesh';
+                                opt.disabled = true;
+                            }
+                            opt.textContent = label;
+                            adapterSel.appendChild(opt);
+                        }
+
+                        // Preselect current config if present
+                        if (current) {
+                            for (const o of adapterSel.options) {
+                                if (o.value === current) {
+                                    o.selected = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        resetChannels('Loading channels…');
+                        await loadChannels();
+                    } catch (e) {
+                        adapterSel.innerHTML = '<option value="" disabled selected>Failed to load adapters</option>';
+                        resetChannels('No channels');
+                        setHint('Failed to load adapter list.');
+                    }
+                }
+
+                async function loadChannels() {
+                    const ifname = adapterSel.value;
+                    if (!ifname) {
+                        resetChannels('Select adapter first…');
+                        setHint('');
+                        return;
+                    }
+
+                    // Persist the currently selected Country Code into the mesh-adapter form (live behavior).
+                    const country = getCountry();
+                    if (countryLive) countryLive.value = country;
+
+                    try {
+                        resetChannels('Loading channels…');
+                        setHint('');
+                        const url = `/api/mesh-channels?ifname=${encodeURIComponent(ifname)}&country=${encodeURIComponent(country)}`;
+                        const r = await fetch(url, { credentials: 'same-origin' });
+                        const data = await r.json();
+
+                        const channels = (data && data.channels) ? data.channels : [];
+                        channelSel.innerHTML = '';
+
+                        if (!channels.length) {
+                            resetChannels('No channels available');
+                            const used = (data && data.country) ? data.country : country;
+                            setHint(`No channels are available for ${ifname} with Country Code ${used}. Verify adapter capabilities and regulatory settings.`);
+                            return;
+                        }
+
+                        const ph = document.createElement('option');
+                        ph.value = '';
+                        ph.disabled = true;
+                        ph.selected = true;
+                        ph.textContent = 'Select channel…';
+                        channelSel.appendChild(ph);
+
+                        // Grouping by band is done via optgroups.
+                        const groups = {};
+                        for (const ch of channels) {
+                            const band = ch.band || 'Wi-Fi';
+                            if (!groups[band]) {
+                                const og = document.createElement('optgroup');
+                                og.label = band;
+                                groups[band] = og;
+                                channelSel.appendChild(og);
+                            }
+                            const opt = document.createElement('option');
+                            opt.value = String(ch.freq_mhz);
+                            opt.textContent = `ch ${ch.channel} (${ch.freq_mhz} MHz)`;
+                            groups[band].appendChild(opt);
+                        }
+
+                        // Preselect current frequency if available
+                        const currentFreq = (data && data.current_frequency1) ? String(data.current_frequency1) : ("{{ current_mesh_frequency1 or '' }}");
+                        if (currentFreq) {
+                            for (const o of channelSel.options) {
+                                if (o.value === currentFreq) {
+                                    o.selected = true;
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        resetChannels('No channels available');
+                        setHint('No channels are available. Verify Country Code selection and adapter capabilities.');
+                    }
+                }
+
+                // Reload channels if adapter changes (live behavior).
+                adapterSel.addEventListener('change', loadChannels);
+
+                // Reload channels if Country Code changes (live behavior).
+                const cs = countrySel();
+                if (cs) cs.addEventListener('change', loadChannels);
+
+                // Ensure form submits the live country selection.
+                const form = adapterSel.closest('form');
+                if (form) {
+                    form.addEventListener('submit', function () {
+                        if (countryLive) countryLive.value = getCountry();
+                    });
+                }
+
+                loadAdapters();
+            });
+        </script>
+    </article>
+
+    <article class="card">
+        <h2 class="card-title">Mesh Parameters</h2>
+        <p class="muted">
+
+        <form class="form" method="post" action="{{ url_for('mesh_config') }}" onsubmit="return window.confirm('This triggers a network services reboot. Continue?');">
+            <input type="hidden" name="action" value="save_mesh_params">
+
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <p>
+                        Current Mesh SSID:
+                        <span class="mono text-ok">{{ current_mesh_ssid or "—" }}</span>
+                    </p>
+                    <label for="new_mesh_ssid">New Mesh SSID</label>
+                    <input id="new_mesh_ssid" name="new_mesh_ssid" type="text" placeholder="e.g. orbis_mesh" autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="new_mesh_password">New Password</label>
+                    <input id="new_mesh_password" name="new_mesh_password" type="password" placeholder="(optional)" autocomplete="new-password">
                 </div>
             </div>
 
             <div class="form-grid-2">
                 <div class="form-group">
-                    <label for="mesh_security">Security Mode</label>
-                    <select id="mesh_security" name="mesh_security">
-                        <option value="open">Open</option>
-                        <option value="wpa2">WPA2-PSK</option>
-                        <option value="wpa3">WPA3-SAE</option>
-                        <option value="mixed">WPA2/WPA3 Mixed</option>
+                    <label for="mesh_country_code">Country Code</label>
+                    <select id="mesh_country_code" name="mesh_country_code" required>
+                        {% for c in countries %}
+                            <option value="{{ c.code }}" {% if c.code == current_country_code %}selected{% endif %}>{{ c.name }} ({{ c.code }})</option>
+                        {% endfor %}
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label for="mesh_passphrase">Passphrase</label>
-                    <input id="mesh_passphrase" name="mesh_passphrase" type="password" placeholder="(optional)" autocomplete="new-password">
+                    <label for="mesh_encryption">Encryption</label>
+                    <select id="mesh_encryption" name="mesh_encryption" required>
+                        {% for opt in mesh_encryption_options %}
+                            <option value="{{ opt.value }}"
+                                    {% if opt.value == current_mesh_encryption %}selected{% endif %}
+                                    {% if not opt.enabled %}disabled{% endif %}
+                                    {% if opt.reason %}title="{{ opt.reason }}"{% endif %}>
+                                {{ opt.label }}{% if not opt.enabled %} ({{ opt.reason or 'Not supported' }}){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
 
