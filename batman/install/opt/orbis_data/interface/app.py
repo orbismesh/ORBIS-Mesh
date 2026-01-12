@@ -1072,6 +1072,7 @@ def _check_systemd_active(unit_name: str):
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
+            timeout=1.0,  # 1 Sekunden Timeout (Pi Zero kann sonst hängen)
             check=False,
         )
         status = result.stdout.strip()
@@ -1079,6 +1080,9 @@ def _check_systemd_active(unit_name: str):
             return True
         if status in {"inactive", "failed"}:
             return False
+        return None
+    except subprocess.TimeoutExpired:
+        # Bei Timeout: Fallback auf Cached Status oder None
         return None
     except Exception:
         return None
@@ -1101,23 +1105,81 @@ def _check_interface_up(ifname: str):
 
 
 # ---------------------------------------------------------------------------
-# Uplink reachability cache (to avoid running connectivity probes too frequently)
+# Uplink reachability cache - now updated by background thread (not directly queried)
 # ---------------------------------------------------------------------------
-_UPLINK_CACHE_TTL_SECONDS = 5.0
-_uplink_cache_lock = threading.Lock()
-_uplink_cache_last_check_ts = 0.0
-_uplink_cache_last_result = False
+# (moved to background thread to avoid blocking requests)
+
+# ---------------------------------------------------------------------------
+# Service Status Cache (to avoid repeated systemctl queries)
+# ---------------------------------------------------------------------------
+_SERVICE_STATUS_CACHE_TTL = 5.0  # 5 Sekunden (Service-Status ändert sich selten)
+_service_status_cache_lock = threading.Lock()
+_service_status_cache_ts = 0.0
+_service_status_cache_data = {}
+_systemctl_update_thread = None
+
+# Uplink cache (auch in Background-Thread aktualisiert)
+_uplink_cache_lock_bg = threading.Lock()
+_uplink_cache_data_bg = False
+
+def _systemctl_update_loop():
+    """Background thread: aktualisiert Service Status alle 5 Sekunden, Uplink alle 10 Sekunden (non-blocking)"""
+    global _service_status_cache_ts, _service_status_cache_data, _uplink_cache_data_bg
+    uplink_counter = 0
+    while True:
+        try:
+            # Aktualisiere Service-Status in Hintergrund-Thread (blockiert nicht den Request-Handler)
+            services = {
+                "mesh_monitor": _check_systemd_active("mesh-monitor.service"),
+                "ogm_monitor": _check_systemd_active("ogm-monitor.service"),
+                "hostapd": _check_systemd_active("hostapd.service"),
+                "dnsmasq": _check_systemd_active("dnsmasq.service"),
+            }
+            with _service_status_cache_lock:
+                _service_status_cache_data = services
+                _service_status_cache_ts = time.monotonic()
+            
+            # Aktualisiere Uplink-Status nur alle 10 Sekunden (2x pro _SERVICE_STATUS_CACHE_TTL-Zyklus)
+            uplink_counter += 1
+            if uplink_counter >= 2:
+                uplink_ok = _check_uplink_ok(timeout_seconds=0.5)
+                with _uplink_cache_lock_bg:
+                    _uplink_cache_data_bg = uplink_ok
+                uplink_counter = 0
+            
+            # Warte 5 Sekunden vor nächstem Update
+            time.sleep(_SERVICE_STATUS_CACHE_TTL)
+        except Exception as e:
+            print(f"[systemctl-bg] error: {e}")
+
+def _get_service_status_cached(service_name: str) -> bool | None:
+    """Return cached systemd unit status (never blocks the request handler)."""
+    with _service_status_cache_lock:
+        return _service_status_cache_data.get(service_name)
+
+# ---------------------------------------------------------------------------
+# Wi-Fi Adapter Cache (to avoid repeated iw phy queries)
+# ---------------------------------------------------------------------------
+_IFACE_CACHE_TTL_SECONDS = 30.0
+_iface_cache_lock = threading.Lock()
+_iface_cache_last_check_ts = 0.0
+_iface_cache_data = {
+    "adapters": [],
+    "bands": {},       # ifname -> [bands]
+    "capabilities": {} # ifname -> {support: bool, bands: [...]}
+}
+
+def _invalidate_iface_cache():
+    """Force refresh of interface cache on next query."""
+    global _iface_cache_last_check_ts
+    with _iface_cache_lock:
+        _iface_cache_last_check_ts = 0.0
 
 def _get_uplink_ok_cached() -> bool:
-    """Return cached uplink status; refresh at most every _UPLINK_CACHE_TTL_SECONDS."""
-    global _uplink_cache_last_check_ts, _uplink_cache_last_result
-    now = time.monotonic()
-    with _uplink_cache_lock:
-        if (now - _uplink_cache_last_check_ts) < _UPLINK_CACHE_TTL_SECONDS:
-            return _uplink_cache_last_result
-        _uplink_cache_last_check_ts = now
-        _uplink_cache_last_result = _check_uplink_ok()
-        return _uplink_cache_last_result
+    """Return cached uplink status (updated by background thread every 5s, never blocks)."""
+    global _uplink_cache_data_bg
+    with _uplink_cache_lock_bg:
+        return _uplink_cache_data_bg
 def _check_uplink_ok(timeout_seconds: float = 1.5) -> bool:
     """Return True if outbound connectivity is available via any interface.
 
@@ -1289,17 +1351,22 @@ def inject_mesh_status():
 @app.route("/api/local-node")
 @login_required
 def api_local_node():
-    """Return MAC address and status of local node services/interfaces as JSON."""
+    """Return MAC address and status of local node services/interfaces as JSON.
+    
+    Optimized: Uses cached systemd checks (2s TTL) + cached interface checks
+    to avoid repeated blocking subprocess calls.
+    """
     mac_wlan1 = _read_mac_address("wlan1")
 
+    # Use cached status checks instead of live queries (saves ~3s per request)
     status = {
-        "mesh_monitor": _check_systemd_active("mesh-monitor.service"),
-        "ogm_monitor": _check_systemd_active("ogm-monitor.service"),
-        "hostapd": _check_systemd_active("hostapd.service"),
-        "dnsmasq": _check_systemd_active("dnsmasq.service"),
-        "br0": _check_interface_up("br0"),
-        "wlan1": _check_interface_up("wlan1"),
-        "eth0": _check_interface_up("eth0"),
+        "mesh_monitor": _get_service_status_cached("mesh_monitor"),
+        "ogm_monitor": _get_service_status_cached("ogm_monitor"),
+        "hostapd": _get_service_status_cached("hostapd"),
+        "dnsmasq": _get_service_status_cached("dnsmasq"),
+        "br0": _check_interface_up("br0"),    # Fast: /sys filesystem read
+        "wlan1": _check_interface_up("wlan1"), # Fast: /sys filesystem read
+        "eth0": _check_interface_up("eth0"),   # Fast: /sys filesystem read
         "uplink": _get_uplink_ok_cached(),
     }
 
@@ -1309,7 +1376,6 @@ def api_local_node():
             "status": status,
         }
     )
-
 
 # -----------------------------------------------------------------------------
 # Mesh adapter/channel API (Mesh Config)
@@ -1415,9 +1481,9 @@ def dashboard():
 
 
 
-@app.route("/mesh-config", methods=["GET", "POST"])
+@app.route("/network-config", methods=["GET", "POST"])
 @login_required
-def mesh_config():
+def network_config():
     """Mesh configuration page."""
 
     conf_path = _get_orbis_conf_path()
@@ -1433,17 +1499,17 @@ def mesh_config():
             # Validate Node Name (conservative, hostname-compatible)
             if not new_node_name or len(new_node_name) > 63:
                 flash("Invalid Node Name. Please use 1–63 characters.", "error")
-                return redirect(url_for("mesh_config"))
+                return redirect(url_for("network_config"))
 
             # Allow spaces in the UI but keep file value quoted; reject control chars
             if any(ord(c) < 32 for c in new_node_name):
                 flash("Invalid Node Name.", "error")
-                return redirect(url_for("mesh_config"))
+                return redirect(url_for("network_config"))
 
             # Validate Node ID (positive integer)
             if not new_node_id.isdigit() or int(new_node_id) <= 0:
                 flash("Invalid Node ID. Please use a positive integer.", "error")
-                return redirect(url_for("mesh_config"))
+                return redirect(url_for("network_config"))
 
             _write_kv_line(conf_path, "NODE_ID", str(int(new_node_id)))
             # Quote the name to remain shell-compatible and preserve spaces.
@@ -1451,11 +1517,12 @@ def mesh_config():
             _write_kv_line(conf_path, "NODE_NAME", f'"{safe_name}"')
 
             flash("Identity has been saved.", "success")
-            return redirect(url_for("mesh_config"))
+            return redirect(url_for("network_config"))
 
         if action == "save_mesh_params":
             new_mesh_ssid = (request.form.get("new_mesh_ssid") or "").strip()
             new_mesh_password = (request.form.get("new_mesh_password") or "").strip()
+            mesh_hop_limit = (request.form.get("mesh_hop_limit") or "").strip()
             mesh_country_code = (request.form.get("mesh_country_code") or "").strip().upper()
             mesh_encryption = (request.form.get("mesh_encryption") or "").strip().upper()
 
@@ -1463,17 +1530,24 @@ def mesh_config():
             if new_mesh_ssid:
                 if len(new_mesh_ssid) > 32 or any(ord(c) < 32 for c in new_mesh_ssid):
                     flash("Invalid Mesh SSID. Please use up to 32 printable characters.", "error")
-                    return redirect(url_for("mesh_config"))
+                    return redirect(url_for("network_config"))
                 # Preserve spaces by quoting for shell-compat.
                 safe_ssid = new_mesh_ssid.replace('"', r'\\"')
                 _write_kv_line(conf_path, "MESH_SSID", f'"{safe_ssid}"')
+
+            # Hop Limit is optional; validate if provided
+            if mesh_hop_limit:
+                if not mesh_hop_limit.isdigit() or not (1 <= int(mesh_hop_limit) <= 255):
+                    flash("Invalid Hop Limit. Please use a value between 1 and 255.", "error")
+                    return redirect(url_for("network_config"))
+                _write_kv_line(conf_path, "MESH_HOP_LIMIT", str(int(mesh_hop_limit)))
 
             # Password is optional; if provided, store as-is (shell-compatible).
             if new_mesh_password:
                 # Conservative: 8..63 for WPA2/WPA3 PSK/SAE; keep permissive for now.
                 if any(ord(c) < 32 for c in new_mesh_password):
                     flash("Invalid Mesh Password.", "error")
-                    return redirect(url_for("mesh_config"))
+                    return redirect(url_for("network_config"))
                 safe_pw = new_mesh_password.replace('"', r'\\"')
                 # New key requested by the UI.
                 _write_kv_line(conf_path, "MESH_PASSWORD", f'"{safe_pw}"')
@@ -1483,7 +1557,7 @@ def mesh_config():
             # Country code is reused from Local Network and stored in orbis.conf as COUNTRY.
             if not mesh_country_code or mesh_country_code not in ISO_COUNTRY_CODES:
                 flash("Invalid Country Code.", "error")
-                return redirect(url_for("mesh_config"))
+                return redirect(url_for("network_config"))
             _write_kv_line(conf_path, "COUNTRY", mesh_country_code)
 
             # Encryption: only allow modes supported by the mesh adapters.
@@ -1492,7 +1566,7 @@ def mesh_config():
             if mesh_encryption:
                 if mesh_encryption not in enabled_values:
                     flash("Selected encryption is not supported by the mesh adapters.", "error")
-                    return redirect(url_for("mesh_config"))
+                    return redirect(url_for("network_config"))
                 _write_kv_line(conf_path, "MESH_ENCRYPTION", mesh_encryption)
 
             warnings = _restart_network_stack_for_mesh()
@@ -1501,7 +1575,7 @@ def mesh_config():
                 flash("Mesh parameters saved. Some services reported warnings; check logs.", "warning")
             else:
                 flash("Mesh parameters saved and applied.", "success")
-            return redirect(url_for("mesh_config"))
+            return redirect(url_for("network_config"))
 
         if action == "save_mesh_adapter":
             mesh_adapter_1 = (request.form.get("mesh_adapter_1") or "").strip()
@@ -1511,15 +1585,15 @@ def mesh_config():
 
             if not mesh_adapter_1 or not _iface_exists(mesh_adapter_1) or mesh_adapter_1 == "wlan0":
                 flash("Invalid mesh adapter.", "error")
-                return redirect(url_for("mesh_config"))
+                return redirect(url_for("network_config"))
 
             if not _iface_supports_mesh(mesh_adapter_1):
                 flash("Selected adapter does not support mesh.", "error")
-                return redirect(url_for("mesh_config"))
+                return redirect(url_for("network_config"))
 
             if not mesh_channel_1.isdigit():
                 flash("Invalid channel selection.", "error")
-                return redirect(url_for("mesh_config"))
+                return redirect(url_for("network_config"))
 
             if mesh_country_code_live and mesh_country_code_live in ISO_COUNTRY_CODES:
                 country = mesh_country_code_live
@@ -1528,7 +1602,7 @@ def mesh_config():
 
             if not country or country not in ISO_COUNTRY_CODES:
                 flash("Invalid Country Code.", "error")
-                return redirect(url_for("mesh_config"))
+                return redirect(url_for("network_config"))
 
             # Validate the selected frequency against the allowed list for the
             # selected adapter and the *live* country selection.
@@ -1540,16 +1614,16 @@ def mesh_config():
             wiphy = _get_wiphy_index(mesh_adapter_1)
             if wiphy is None:
                 flash("Unable to read adapter capabilities.", "error")
-                return redirect(url_for("mesh_config"))
+                return redirect(url_for("network_config"))
             r = subprocess.run(["iw", "phy", f"phy{wiphy}", "info"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             if r.returncode != 0:
                 flash("Unable to read adapter capabilities.", "error")
-                return redirect(url_for("mesh_config"))
+                return redirect(url_for("network_config"))
             phy_freqs = {str(f) for f in _parse_phy_frequencies_mhz(r.stdout or "")}
 
             if mesh_channel_1 not in allowed_freqs or mesh_channel_1 not in phy_freqs:
                 flash("Selected channel is not available for the chosen adapter/country.", "error")
-                return redirect(url_for("mesh_config"))
+                return redirect(url_for("network_config"))
 
             # Persist into orbis.conf.
             _write_kv_line(conf_path, "IF", f'"{mesh_adapter_1}"')
@@ -1560,24 +1634,99 @@ def mesh_config():
                 flash("Mesh adapter saved. Some services reported warnings; check logs.", "warning")
             else:
                 flash("Mesh adapter saved and applied.", "success")
-            return redirect(url_for("mesh_config"))
+            return redirect(url_for("network_config"))
+
+        if action == "save_ip":
+            ip_address = request.form.get("ip_address", "").strip()
+            ip_suffix = request.form.get("ip_suffix", "").strip()
+
+            try:
+                import ipaddress
+                ipaddress.IPv4Address(ip_address)
+            except Exception:
+                flash("Invalid IP", "error")
+                return redirect(url_for("network_config"))
+
+            if not ip_suffix.isdigit():
+                flash("Invalid suffix", "error")
+                return redirect(url_for("network_config"))
+            suffix_int = int(ip_suffix)
+            if suffix_int < 0 or suffix_int > 32:
+                flash("Invalid suffix", "error")
+                return redirect(url_for("network_config"))
+
+            ip_with_suffix = f"{ip_address}/{suffix_int}"
+            _set_br0_address(ip_with_suffix)
+
+            os.system("sudo reboot")
+            return ("", 204)
+
+        if action == "save_ssid":
+            ssid_value = request.form.get("ssid_value", "").strip()
+            wifi_passphrase = request.form.get("wifi_passphrase", "").strip()
+
+            if not ssid_value or len(ssid_value) > 32:
+                flash("Invalid SSID", "error")
+                return redirect(url_for("network_config"))
+
+            hostapd_file = "/etc/hostapd/hostapd.conf"
+            _write_kv_line(hostapd_file, "ssid", ssid_value)
+
+            if wifi_passphrase:
+                if len(wifi_passphrase) < 8 or len(wifi_passphrase) > 63:
+                    flash("Invalid password length", "error")
+                    return redirect(url_for("network_config"))
+                _write_kv_line(hostapd_file, "wpa_passphrase", wifi_passphrase)
+
+            os.system("sudo reboot")
+            return ("", 204)
+
+        if action == "save_wifi":
+            country_code = request.form.get("country_code", "US").strip().upper()
+            wifi_channel = request.form.get("wifi_channel", "1").strip()
+
+            if country_code not in ISO_COUNTRY_CODES:
+                flash("Invalid country code", "error")
+                return redirect(url_for("network_config"))
+
+            if not wifi_channel.isdigit():
+                flash("Invalid channel", "error")
+                return redirect(url_for("network_config"))
+
+            ch = int(wifi_channel)
+            max_ch = _max_channel_24ghz(country_code)
+            if ch < 1 or ch > max_ch:
+                flash("Channel not allowed for country", "error")
+                return redirect(url_for("network_config"))
+
+            hostapd_file = "/etc/hostapd/hostapd.conf"
+            _write_kv_line(hostapd_file, "country_code", country_code)
+            _write_kv_line(hostapd_file, "channel", str(ch))
+
+            os.system("sudo reboot")
+            return ("", 204)
 
         # Future mesh settings will be handled here.
         flash("No changes were applied.", "info")
-        return redirect(url_for("mesh_config"))
+        return redirect(url_for("network_config"))
 
     return render_template(
-        "mesh_config.html",
+        "network_config.html",
         branding="Orbis Mesh",
-        page_title="Mesh Config",
-        active_page="mesh_config",
+        page_title="Network Config",
+        active_page="network_config",
         current_node_name=conf.get("NODE_NAME", ""),
         current_node_id=conf.get("NODE_ID", ""),
         current_mesh_ssid=conf.get("MESH_SSID", ""),
+        current_mesh_password=conf.get("MESH_PASSWORD", ""),
+        current_mesh_hop_limit=conf.get("MESH_HOP_LIMIT", ""),
         current_mesh_encryption=conf.get("MESH_ENCRYPTION", "SAE"),
         current_country_code=conf.get("COUNTRY", ""),
         current_mesh_if=conf.get("IF", ""),
         current_mesh_frequency1=conf.get("MESH_FREQUENCY1", ""),
+        current_node_ip=conf.get("NODE_IP", ""),
+        current_node_cidr=conf.get("NODE_CIDR", ""),
+        current_dns=conf.get("DNS", ""),
         countries=_get_country_options(),
         mesh_encryption_options=_get_mesh_encryption_options(),
     )
@@ -1592,18 +1741,6 @@ def about():
         branding="Orbis Mesh",
         page_title="About",
         active_page="about",
-    )
-
-
-@app.route("/settings")
-@login_required
-def settings():
-    """Example second page."""
-    return render_template(
-        "settings.html",
-        branding="Orbis Mesh",
-        page_title="Settings",
-        active_page="settings",
     )
 
 
@@ -1809,113 +1946,6 @@ def device_config_discard_user_change():
     return redirect(url_for("device_config"))
 
 
-
-@app.route("/local-network")
-@login_required
-def local_network():
-    current_ip_with_suffix = _read_kv_line("/etc/systemd/network/br0.network", "Address", default="–")
-    current_ssid = _read_kv_line("/etc/hostapd/hostapd.conf", "ssid", default="–")
-    current_country_code = _read_kv_line("/etc/hostapd/hostapd.conf", "country_code", default="US").upper()
-    try:
-        current_channel = int(_read_kv_line("/etc/hostapd/hostapd.conf", "channel", default="1"))
-    except ValueError:
-        current_channel = 1
-
-    if current_country_code not in ISO_COUNTRY_CODES:
-        current_country_code = "US"
-
-    return render_template(
-        "local_network.html",
-        branding="Orbis Mesh",
-        page_title="Local Network",
-        active_page="local_network",
-        current_ip_with_suffix=current_ip_with_suffix,
-        current_ssid=current_ssid,
-        current_country_code=current_country_code,
-        current_channel=current_channel,
-        countries=ISO_COUNTRY_CODES,
-    )
-
-
-@app.route("/local-network/ip", methods=["POST"])
-@login_required
-def local_network_set_ip():
-    ip_address = request.form.get("ip_address", "").strip()
-    ip_suffix = request.form.get("ip_suffix", "").strip()
-
-    try:
-        import ipaddress
-        ipaddress.IPv4Address(ip_address)
-    except Exception:
-        return ("Invalid IP", 400)
-
-    if not ip_suffix.isdigit():
-        return ("Invalid suffix", 400)
-    suffix_int = int(ip_suffix)
-    if suffix_int < 0 or suffix_int > 32:
-        return ("Invalid suffix", 400)
-
-    ip_with_suffix = f"{ip_address}/{suffix_int}"
-    _set_br0_address(ip_with_suffix)
-
-    os.system("sudo reboot")
-    return ("", 204)
-
-
-@app.route("/local-network/ssid", methods=["POST"])
-@login_required
-def local_network_set_ssid():
-    """
-    Save SSID (and optionally password) independently from country/channel.
-    If password is left empty, the existing password is kept.
-    """
-    ssid_value = request.form.get("ssid_value", "").strip()
-    wifi_passphrase = request.form.get("wifi_passphrase", "").strip()
-
-    if not ssid_value or len(ssid_value) > 32:
-        return ("Invalid SSID", 400)
-
-    hostapd_file = "/etc/hostapd/hostapd.conf"
-    _write_kv_line(hostapd_file, "ssid", ssid_value)
-
-    if wifi_passphrase:
-        if len(wifi_passphrase) < 8 or len(wifi_passphrase) > 63:
-            return ("Invalid password length", 400)
-        _write_kv_line(hostapd_file, "wpa_passphrase", wifi_passphrase)
-
-    os.system("sudo reboot")
-    return ("", 204)
-
-
-
-@app.route("/local-network/wifi", methods=["POST"])
-@login_required
-def local_network_set_wifi():
-    """
-    Save country code and Wi-Fi channel independently from SSID/password.
-    """
-    country_code = request.form.get("country_code", "US").strip().upper()
-    wifi_channel = request.form.get("wifi_channel", "1").strip()
-
-    if country_code not in ISO_COUNTRY_CODES:
-        return ("Invalid country code", 400)
-
-    if not wifi_channel.isdigit():
-        return ("Invalid channel", 400)
-
-    ch = int(wifi_channel)
-    max_ch = _max_channel_24ghz(country_code)
-    if ch < 1 or ch > max_ch:
-        return ("Channel not allowed for country", 400)
-
-    hostapd_file = "/etc/hostapd/hostapd.conf"
-    _write_kv_line(hostapd_file, "country_code", country_code)
-    _write_kv_line(hostapd_file, "channel", str(ch))
-
-    os.system("sudo reboot")
-    return ("", 204)
-
-
 # ----------------------------------------------------------------------
 # Mesh-Nodes API (Dashboard)
 # ----------------------------------------------------------------------
@@ -1989,5 +2019,13 @@ def reboot():
     return ("",204)
 
 if __name__ == "__main__":
+    import os
+    
+    # Starte Background-Thread für Service Status Updates
+    # WICHTIG: nur im Reloader-Child-Prozess starten (nicht im Parent)
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        _systemctl_update_thread = threading.Thread(target=_systemctl_update_loop, daemon=True)
+        _systemctl_update_thread.start()
+    
     # Run on all interfaces so it is reachable over the network
     app.run(host="0.0.0.0", port=5000, debug=True)

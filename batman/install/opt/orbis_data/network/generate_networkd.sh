@@ -71,6 +71,7 @@ source "$CONF"
 
 : "${COUNTRY:?missing COUNTRY}"
 : "${LOCAL_SSID:?missing LOCAL_SSID}"
+: "${LOCAL_BAND:?missing LOCAL_BAND}"
 : "${LOCAL_CH:?missing LOCAL_CH}"
 : "${WPA_PASSPHRASE:?missing WPA_PASSPHRASE}"
 
@@ -94,6 +95,7 @@ ln -sfn "$OUT_BR0" "$LINK_BR0"
 sed \
   -e "s|@LOCAL_SSID@|$LOCAL_SSID|g" \
   -e "s|@COUNTRY@|$COUNTRY|g" \
+  -e "s|@LOCAL_BAND@|$LOCAL_BAND|g" \
   -e "s|@LOCAL_CH@|$LOCAL_CH|g" \
   -e "s|@WPA_PASSPHRASE@|$WPA_PASSPHRASE|g" \
   "$TPL_HOSTAPD" > "$tmp"

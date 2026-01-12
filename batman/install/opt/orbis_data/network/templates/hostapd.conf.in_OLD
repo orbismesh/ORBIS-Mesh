@@ -1,0 +1,96 @@
+# Hostapd configuration for Raspberry Pi 5 - 5GHz Access Point
+# This configuration provides a secure 5GHz wireless access point
+
+# Interface and driver settings
+interface=wlan0
+driver=nl80211
+
+# SSID and authentication
+ssid=@LOCAL_SSID@
+wpa_passphrase=@WPA_PASSPHRASE@
+
+# Country and regulatory domain (important for legal operation)
+country_code=@COUNTRY@
+ieee80211d=1
+
+# 5GHz specific settings
+hw_mode=a
+band=a
+channel=@LOCAL_CH@
+# Available 5GHz channels depend on country_code:
+# US: 36-48, 52-144, 149-165
+# EU: 36-48, 52-144
+# Use automatic channel selection to avoid interference:
+# channel=0
+
+# 802.11 standards and capabilities
+ieee80211n=1
+ieee80211ac=1
+ieee80211ax=0
+# Raspberry Pi 5 with newer WiFi chipsets may support 802.11be (WiFi 6E)
+# but typically not enabled
+
+# HT/VHT capabilities for 5GHz
+ht_capab=[SHORT-GI-20][SHORT-GI-40][TX-STBC][RX-STBC1][MAX-A-MPDU-LEN-EXP3][DSSS_CCK-40]
+vht_capab=[SHORT-GI-80][TX-STBC][RX-STBC-1][MAX-A-MPDU-LEN-EXP7]
+
+# Channel width (40MHz or 80MHz for better throughput)
+# 40MHz is more stable, 80MHz gives better speeds but needs good signal
+ht_capab=[SHORT-GI-40][HT40+][HT40-]
+vht_oper_chwidth=1
+vht_oper_centr_freq_seg0_idx=42
+
+# WPA2/WPA3 Security
+wpa=2
+wpa_key_mgmt=WPA-PSK WPA-PSK-SHA256
+rsn_pairwise=CCMP
+wpa_pairwise=CCMP
+wpa_psk_radius=0
+
+# Enable WPA3 (if supported by your hostapd version)
+# wpa=3
+# wpa_key_mgmt=SAE
+# rsn_pairwise=CCMP CCMP-256 GCMP GCMP-256
+
+# Bridging (if using bridge mode)
+# bridge=br0
+
+# Power settings for Raspberry Pi
+max_num_sta=32
+ap_isolate=0
+
+# Power saving mode
+uapsd_advertisement_enabled=1
+
+# Beacon and DTIM intervals
+beacon_int=100
+dtim_period=2
+
+# Additional performance tuning for Raspberry Pi
+# Enable RTS/CTS for noisy environments
+# rts_threshold=1500
+
+# WMM (WiFi Multimedia) for QoS
+wmm_enabled=1
+
+# Fragment threshold
+fragm_threshold=2346
+
+# Enable 802.1X authentication (optional)
+# ieee8021x=1
+
+# Logging
+logger_syslog=-1
+logger_syslog_level=2
+logger_stdout=-1
+logger_stdout_level=2
+
+# Disassociate low signal strength clients
+disassoc_low_ack=1
+disassoc_low_ack_threshold=5
+
+# TX power (in dBm, depends on hardware)
+# tx_power_level=20
+
+# Optional: Require PMF (Protected Management Frames)
+ieee80211w=1

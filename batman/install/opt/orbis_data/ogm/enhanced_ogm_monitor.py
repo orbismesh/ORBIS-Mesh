@@ -26,14 +26,16 @@ import time
 import glob
 import fcntl, sys
 import tempfile
+import threading
 from typing import Dict, Any, List, Optional
+from queue import Queue
 
 
 class EnhancedOGMMonitor:
     # --- Configuration ---
     STATUS_FILE = "/opt/orbis_data/ogm/node_status.json"
     WIFI_IFACES: List[str] = ["wlan1", "mesh0", "wlan0"]
-    POLL_INTERVAL_SEC = 1
+    POLL_INTERVAL_SEC = 5  # Optimiert für Pi Zero 2W: 1s -> 5s (weniger I/O auf SD-Karte)
     LOG_PREFIX = "[ogm]"
 
     def __init__(self) -> None:
@@ -45,6 +47,10 @@ class EnhancedOGMMonitor:
             self._lockf.close()
             sys.exit(0)
         self.local_mac = self._get_local_mac()
+        # Deferred write queue + thread für asynchrones Schreiben
+        self._write_queue: Queue = Queue(maxsize=1)
+        self._writer_thread = threading.Thread(target=self._writer_loop, daemon=True)
+        self._writer_thread.start()
         print(f"{self.LOG_PREFIX} start | local_mac={self.local_mac} ifaces={self.WIFI_IFACES}")
 
     # ---------------------- helpers ----------------------
@@ -331,6 +337,26 @@ class EnhancedOGMMonitor:
         return None
 
     def write_status(self, payload):
+        """Queue payload für asynchrones Schreiben (non-blocking)"""
+        # Alte Queue-Item löschen (nur das neueste halten)
+        try:
+            self._write_queue.get_nowait()
+        except:
+            pass
+        # Neues Item queuen
+        self._write_queue.put(payload)
+
+    def _writer_loop(self):
+        """Separater Thread, der asynchron JSON schreibt"""
+        while True:
+            try:
+                payload = self._write_queue.get(timeout=1)
+                self._write_status_sync(payload)
+            except:
+                pass
+
+    def _write_status_sync(self, payload):
+        """Synchrone Schreiboperation (läuft in separatem Thread)"""
         try:
             dirpath = os.path.dirname(self.STATUS_FILE)
             os.makedirs(dirpath, exist_ok=True)

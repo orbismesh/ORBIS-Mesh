@@ -44,8 +44,14 @@ log "[mesh] tuning beacon interval and mesh parameters"
 iw dev "${IF}" set beacon_int 750 || true
 
 # Mesh-IE minimieren / Root-Funktion deaktivieren
+# Optimierungen für Pi Zero 2W: CPU und RAM sparen
 iw dev "${IF}" set mesh_param mesh_hwmp_rootmode=0 || true
 iw dev "${IF}" set mesh_param mesh_gate_announcements=0 || true
+# Reduziere OGM Frequenz (von default 1000ms auf 5000ms)
+iw dev "${IF}" set mesh_param mesh_hwmp_preq_min_interval=5000 || true
+iw dev "${IF}" set mesh_param mesh_element_ttl=31 || true
+# Deaktiviere Mesh Power Save für stabilere Verbindungen
+iw dev "${IF}" set mesh_param mesh_power_mode=0 || true || true
 
 log "[mesh] join open 802.11s: ssid='${MESH_SSID}', freq=${FREQ}"
 # Leave (idempotent), Join (open), Forwarding for batman-adv
@@ -61,16 +67,28 @@ modprobe batman-adv 2>/dev/null || true
 ip link add bat0 type batadv 2>/dev/null || true
 ip link set bat0 up
 batctl if add "${IF}" 2>/dev/null || true
-batctl dat 1
-batctl ap_isolation 0
+# Optimierungen für Pi Zero 2W: Reduziere Broadcast-Last
+batctl dat 1                    # Distributed ARP Table aktiviert (spart Broadcasts)
+batctl ap_isolation 0           # AP Isolation aus (ermöglicht direkte Client-Kommunikation)
+batctl loglevel 0 batman-adv    # Reduziere Debug-Logging
+batctl gw_mode off 2>/dev/null || true  # Gateway Mode aus (nicht nötig für reines Mesh)
 
-# Optional: bat0 to br0 join, if bridge is existing
-if ip link show "${BRIDGE_NAME}" >/dev/null 2>&1; then
-  log "[bridge] join bat0 in ${BRIDGE_NAME}"
-  ip link set "${BRIDGE_NAME}" up || true
-  ip link set dev bat0 master "${BRIDGE_NAME}" || true
-fi
-
+# Ensure: bat0 is attached to ${BRIDGE_NAME} (wait/retry for deterministic startup)
+log "[bridge] ensure bat0 is member of ${BRIDGE_NAME}"
+for i in $(seq 1 30); do
+  if ip link show "${BRIDGE_NAME}" >/dev/null 2>&1; then
+    ip link set "${BRIDGE_NAME}" up || true
+    ip link set bat0 up || true
+    # idempotent: may already be enslaved
+    ip link set dev bat0 master "${BRIDGE_NAME}" 2>/dev/null || true
+    # verify membership
+    if bridge link 2>/dev/null | grep -qE "bat0:.*master ${BRIDGE_NAME}"; then
+      log "[bridge] bat0 successfully joined ${BRIDGE_NAME}"
+      break
+    fi
+  fi
+  sleep 1
+done
 # Optional: wait for peer (just info)
 log "[wait] wait for ${WAIT_PEER}s mesh-peer"
 for i in $(seq "${WAIT_PEER}"); do

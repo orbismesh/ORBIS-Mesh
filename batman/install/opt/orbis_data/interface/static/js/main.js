@@ -199,7 +199,7 @@
         }
 
         refresh();
-        setInterval(refresh, 1000);
+        setInterval(refresh, 5000);
     }
 
         function initMeshNodesWidget() {
@@ -477,7 +477,7 @@ function createNodeCard(mac, node, timeoutSeconds) {
         }
 
         refresh();
-        setInterval(refresh, 1000);
+        setInterval(refresh, 5000);
     }
 
 

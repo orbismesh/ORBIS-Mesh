@@ -6,26 +6,18 @@
 
     <article class="card">
         <h2 class="card-title">Identity</h2>
-<form class="form" method="post" action="{{ url_for('mesh_config') }}">
+            <form class="form" method="post" action="{{ url_for('network_config') }}">
             <input type="hidden" name="action" value="save_identity">
 
             <div class="form-grid-2">
                 <div class="form-group">
-                    <p>
-                        Current Node Name:
-                        <span class="mono text-ok">{{ current_node_name or "—" }}</span>
-                    </p>
-                    <label for="new_node_name">New Node Name</label>
-                    <input id="new_node_name" name="new_node_name" type="text" placeholder="e.g. Node 1" autocomplete="off">
+                    <label for="new_node_name">Node Name</label>
+                    <input id="new_node_name" name="new_node_name" type="text" placeholder="e.g. Node 1" value="{{ current_node_name or '' }}" autocomplete="off">
                 </div>
 
                 <div class="form-group">
-                    <p>
-                        Current Node ID:
-                        <span class="mono text-ok">{{ current_node_id or "—" }}</span>
-                    </p>
-                    <label for="new_node_id">New Node ID</label>
-                    <input id="new_node_id" name="new_node_id" type="number" min="1" step="1" placeholder="e.g. 1">
+                    <label for="new_node_id">Node ID</label>
+                    <input id="new_node_id" name="new_node_id" type="number" min="1" step="1" placeholder="e.g. 1" value="{{ current_node_id or '' }}">
                 </div>
             </div>
 
@@ -38,16 +30,12 @@
     <article class="card">
         <h2 class="card-title">Mesh Adapter</h2>
 
-        <form class="form" method="post" action="{{ url_for('mesh_config') }}" onsubmit="return window.confirm('This triggers a network services reboot. Continue?');">
+        <form class="form" method="post" action="{{ url_for('network_config') }}" onsubmit="return window.confirm('This triggers a network services reboot. Continue?');">
             <input type="hidden" name="action" value="save_mesh_adapter">
             <input type="hidden" id="mesh_country_code_live" name="mesh_country_code_live" value="{{ current_country_code }}">
 
             <div class="form-grid-2">
                 <div class="form-group">
-                    <p>
-                        Current Adapter:
-                        <span class="mono text-ok">{{ current_mesh_if or "—" }}</span>
-                    </p>
                     <label for="mesh_adapter_1">Adapter 1</label>
                     <select id="mesh_adapter_1" name="mesh_adapter_1" required>
                         <option value="" disabled selected>Loading…</option>
@@ -55,10 +43,6 @@
                 </div>
 
                 <div class="form-group">
-                    <p>
-                        Current Frq:
-                        <span class="mono text-ok">{{ current_mesh_frequency1 or "—" }}{% if current_mesh_frequency1 %} MHz{% endif %}</span>
-                    </p>
                     <label for="mesh_channel_1">Channel</label>
                     <select id="mesh_channel_1" name="mesh_channel_1" required>
                         <option value="" disabled selected>Select adapter first…</option>
@@ -243,23 +227,26 @@
 
     <article class="card">
         <h2 class="card-title">Mesh Parameters</h2>
-        <p>
-                Current Mesh SSID: <span class="mono text-ok">{{ current_mesh_ssid or "—" }}</span>
-            </p>
-
-        <form class="form" method="post" action="{{ url_for('mesh_config') }}" onsubmit="return window.confirm('This triggers a network services reboot. Continue?');">
+        <form class="form" method="post" action="{{ url_for('network_config') }}" onsubmit="return window.confirm('This triggers a network services reboot. Continue?');">
             <input type="hidden" name="action" value="save_mesh_params">
 
             <div class="form-grid-2">
                 <div class="form-group">
                     
-                    <label for="new_mesh_ssid">New Mesh SSID</label>
-                    <input id="new_mesh_ssid" name="new_mesh_ssid" type="text" placeholder="e.g. orbis_mesh" autocomplete="off">
+                    <label for="new_mesh_ssid">Mesh SSID</label>
+                    <input id="new_mesh_ssid" name="new_mesh_ssid" type="text" placeholder="e.g. orbis_mesh" value="{{ current_mesh_ssid or '' }}" autocomplete="off">
                 </div>
 
                 <div class="form-group">
-                    <label for="new_mesh_password">New Password</label>
-                    <input id="new_mesh_password" name="new_mesh_password" type="password" placeholder="optional" autocomplete="new-password">
+                    <label for="new_mesh_password">Password</label>
+                    <input id="new_mesh_password" name="new_mesh_password" type="password" placeholder="•••••••••" value="{{ current_mesh_password or '' }}" autocomplete="new-password">
+                </div>               
+            </div>
+
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label for="mesh_hop_limit">Hop Limit</label>
+                    <input id="mesh_hop_limit" name="mesh_hop_limit" type="number" min="1" max="255" placeholder="e.g. 31" value="{{ current_mesh_hop_limit or '' }}">
                 </div>
             </div>
 
@@ -295,68 +282,27 @@
     </article>
 
     <article class="card">
-        <h2 class="card-title">IP (WiFi & Ethernet)</h2>
-        <p>
-            Current IP:
-            <span class="mono text-ok">{{ current_ip_with_suffix }}</span>
-        </p>
-
-        <form class="form form-inline" method="post" action="{{ url_for('local_network_set_ip') }}"
+        <h2 class="card-title">Node IP</h2>
+            <form class="form form-inline" method="post" action="{{ url_for('network_config') }}"
               onsubmit="return confirm('Saving these settings will reboot the system. Continue?');">
+            <input type="hidden" name="action" value="save_identity">
+
             <div class="form-grid-2">
                 <div class="form-group">
-                    <label for="ip_address">New IP</label>
-                    <input type="text" id="ip_address" name="ip_address" placeholder="e.g. 192.168.200.10" required>
+                    <label for="new_node_name">Mesh / AP IP</label>
+                    <input type="text" id="ip_address" name="ip_address" placeholder="e.g. 192.168.200.10" value="{{ current_node_ip or '' }}" required>
                 </div>
+
                 <div class="form-group">
-                    <label for="ip_suffix">New Suffix</label>
-                    <input type="number" id="ip_suffix" name="ip_suffix" min="0" max="32" placeholder="e.g. 24" required>
+                    <label for="new_node_id">Suffix (CIDR)</label>
+                    <input type="number" id="ip_suffix" name="ip_suffix" min="0" max="32" placeholder="e.g. 24" value="{{ current_node_cidr or '' }}" required>
                 </div>
             </div>
-            <div class="form-actions">
-                <button type="submit" class="btn-primary">Save</button>
-            </div>
-        </form>
-    </article>
 
-    <article class="card">
-        <h2 class="card-title">Local SSID</h2>
-        <p>
-            Current SSID:
-            <span class="mono text-ok">{{ current_ssid }}</span>
-        </p>
-
-        
-        <form class="form form-inline" method="post" action="{{ url_for('local_network_set_ssid') }}"
-              onsubmit="return confirm('Saving these settings will reboot the system. Continue?');">
-            <div class="form-group">
-                <label for="ssid_value">New SSID</label>
-                <input type="text" id="ssid_value" name="ssid_value" placeholder="New SSID" required>
-            </div>
-
-            <div class="form-group">
-                <label for="wifi_passphrase">New Password</label>
-                <input type="password" id="wifi_passphrase" name="wifi_passphrase"
-                       placeholder="New password" autocomplete="new-password">
-            </div>
-
-            <div class="form-actions">
-                <button type="submit" class="btn-primary">Save</button>
-            </div>
-        </form>
-
-
-        <form class="form form-inline" method="post" action="{{ url_for('local_network_set_wifi') }}"
-              onsubmit="return confirm('Saving these settings will reboot the system. Continue?');">
             <div class="form-grid-2">
-
                 <div class="form-group">
-                    <label for="wifi_channel">Channel</label>
-                    <select id="wifi_channel" name="wifi_channel" required>
-                        {% for ch in range(1, 15) %}
-                            <option value="{{ ch }}" {% if ch == current_channel %}selected{% endif %}>{{ ch }}</option>
-                        {% endfor %}
-                    </select>
+                    <label for="dns_address">DNS (Must match Mesh IP)</label>
+                    <input type="text" id="dns_address" name="dns_address" placeholder="e.g. 192.168.200.10" value="{{ current_dns or '' }}">
                 </div>
             </div>
 
@@ -364,40 +310,6 @@
                 <button type="submit" class="btn-primary">Save</button>
             </div>
         </form>
-
-
-        <script>
-            (function () {
-                const countryEl = document.getElementById("country_code");
-                const channelEl = document.getElementById("wifi_channel");
-
-                function maxChannelForCountry(code) {
-                    // Conservative 2.4 GHz mapping:
-                    // US/CA/MX: 1–11, JP: 1–14, most others: 1–13
-                    const c = (code || "").toUpperCase();
-                    if (c === "JP") return 14;
-                    if (c === "US" || c === "CA" || c === "MX") return 11;
-                    return 13;
-                }
-
-                function applyChannelRules() {
-                    const maxCh = maxChannelForCountry(countryEl.value);
-                    const current = parseInt(channelEl.value, 10) || 1;
-
-                    for (const opt of channelEl.options) {
-                        const ch = parseInt(opt.value, 10);
-                        opt.disabled = (ch > maxCh);
-                    }
-
-                    if (current > maxCh) {
-                        channelEl.value = String(maxCh);
-                    }
-                }
-
-                countryEl.addEventListener("change", applyChannelRules);
-                applyChannelRules();
-            })();
-        </script>
     </article>
 
 </section>

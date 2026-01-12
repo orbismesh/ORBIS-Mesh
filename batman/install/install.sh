@@ -16,16 +16,30 @@ tty_print()   { printf "%s" "$*" > /dev/tty; }
 tty_println() { printf "%s\n" "$*" > /dev/tty; }
 tty_read()    { IFS= read -r "$@" < /dev/tty; }
 
-# -------- Install mode selection --------------------------------------------
+# -------- Global variable initialization (MUST be set before use) ------------
 CONFIG_ONLY=false
+INSTALL_OLED=false
 MODE_SELECTED=false
 ABORT=false
+RUN_RESET_ID=false
+DO_REBOOT=false
+USE_PIPX=true
+DRY_RUN=false
+EXIT_TO_CONSOLE=false
+
+# Decide whether we need sudo for privileged operations (used throughout).
+if [ "$(id -u)" -eq 0 ]; then
+  sudo=""
+else
+  sudo="sudo "
+fi
 
 # Respect non-interactive mode flags if provided
 for _arg in "$@"; do
   case "$_arg" in
     --config-only|--configure|--configure-only|--network-only) CONFIG_ONLY=true; MODE_SELECTED=true ;;
-    --full-install) CONFIG_ONLY=false; MODE_SELECTED=true ;;
+    --full-install) CONFIG_ONLY=false; INSTALL_OLED=false; MODE_SELECTED=true ;;
+    --full-install-oled) CONFIG_ONLY=false; INSTALL_OLED=true; MODE_SELECTED=true ;;
   esac
 done
 
@@ -34,26 +48,29 @@ select_install_mode() {
   local choice=""
   ABORT=false
   if command -v whiptail >/dev/null 2>&1; then
-    choice="$(whiptail --title "OrbisMesh Installer" --clear --menu "Select operation" 15 78 3 \
+    choice="$(whiptail --title "OrbisMesh Installer" --clear --menu "Select operation" 15 78 4 \
       "1" "Full Installation" \
-      "2" "Network Configuration Only" \
-      "3" "Abort" \
-      3>&1 1>&2 2>&3 </dev/tty)" || choice="3"
+      "2" "Full Installation with OLED support" \
+      "3" "Network Configuration Only" \
+      "4" "Abort" \
+      3>&1 1>&2 2>&3 </dev/tty)" || choice="4"
   else
     tty_println ""
     tty_println "Select operation:"
     tty_println "  1) Full Installation"
-    tty_println "  2) Network Configuration Only"
-    tty_println "  3) Abort"
-    tty_print "Choose [1-3] (default: 1): "
+    tty_println "  2) Full Installation with OLED support"
+    tty_println "  3) Network Configuration Only"
+    tty_println "  4) Abort"
+    tty_print "Choose [1-4] (default: 1): "
     tty_read choice
     choice="${choice:-1}"
   fi
 
   case "$choice" in
-    2|"Network Configuration Only") CONFIG_ONLY=true ;;
-    3|"Abort") ABORT=true ;;
-    *) CONFIG_ONLY=false ;;
+    2|"Full Installation with OLED support") CONFIG_ONLY=false; INSTALL_OLED=true ;;
+    3|"Network Configuration Only") CONFIG_ONLY=true; INSTALL_OLED=false ;;
+    4|"Abort") ABORT=true ;;
+    *) CONFIG_ONLY=false; INSTALL_OLED=false ;;
   esac
 }
 
@@ -95,23 +112,31 @@ else
 fi
 
 
+# -------- Critical paths and directories (set early) -------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MOVE_SRC="${MOVE_SRC:-${SCRIPT_DIR}}"
+root=""
+
 # -------- Logging (warnings & errors) -----------------------------------------
-mkdir -p "$HOME/orbis-mesh_log"
+mkdir -p "$HOME/orbis-mesh_log" 2>/dev/null || true
 LOG_FILE="$HOME/orbis-mesh_log/orbis_fresh_node.log"
-: > "$LOG_FILE"
+: > "$LOG_FILE" 2>/dev/null || LOG_FILE="/dev/null"
 exec > >(tee -a "$LOG_FILE") 2>&1
+
+LOG_TS() { printf '[%s] ' "$(date '+%F %T')"; }
+
+echo "=========================================="
+echo "Starting install.sh at $(date)"
+echo "CONFIG_ONLY=$CONFIG_ONLY"
+echo "SCRIPT_DIR=$SCRIPT_DIR"
+echo "MOVE_SRC=$MOVE_SRC"
+echo "Log file: $LOG_FILE"
+echo "=========================================="
+echo ""
 
 if $CONFIG_ONLY; then
   echo "Running in: Network Configuration Only"
 fi
-
-# -------- Settings -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MOVE_SRC="${MOVE_SRC:-${SCRIPT_DIR}}"
-RUN_RESET_ID=false
-DO_REBOOT=false
-USE_PIPX=true
-LOG_TS() { printf '[%s] ' "$(date '+%F %T')"; }
 
 # -------- Helpers --------------------------------------------------------------
 die() { LOG_TS; echo "ERROR: $*" >&2; exit 1; }
@@ -137,7 +162,6 @@ Usage: $(basename "$0") [--reset-id] [--no-pipx] [--do-reboot] [--dry-run]
 EOF
 }
 
-DRY_RUN=false
 run() { LOG_TS; echo "+ $*"; $DRY_RUN || eval "$@"; }
 
 # -------- Argparse -------------------------------------------------------------
@@ -154,70 +178,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# -------- Preflight -----------------------------------------------------
-if ! $CONFIG_ONLY; then
-sudocheck
-need bash
-need tee
-need awk
-need sed
-need grep
-need rsync
-command -v systemctl >/dev/null 2>&1 || true
-
+# -------- Preflight  & Configuration setup (runs for all modes) --------
+# Set sudo variable (if already set above, this is redundant but safe)
 if [ "$(id -u)" -eq 0 ]; then
   sudo=""
 else
   sudo="sudo "
 fi
 
-LOG_TS; echo "Starting setup …"
-LOG_TS; echo "Options: reset-id=${RUN_RESET_ID}, pipx=${USE_PIPX}, reboot=${DO_REBOOT}, dry-run=${DRY_RUN}"
-
-# -------- wlan dummy logic (as in your original) ------------------------------
-n_wlan=$(iw dev | grep "^[[:space:]]*Interface" | wc -l)
-if [ "$n_wlan" -lt 2 ]; then
-  drv=""
-  if [ "$n_wlan" -eq 1 -a -e /sys/class/net/wlan0/device ]; then
-    drv=$(basename "$(readlink -f "/sys/class/net/wlan0/device/driver/module")")
-    read mac < /sys/class/net/wlan0/address
-    echo "SUBSYSTEM==\"net\", ACTION==\"add\", ATTR{address}==\"${mac}\", NAME=\"wlan1\"" | sudo tee /etc/udev/rules.d/50-wlan1.rules > /dev/null
-    run "sudo rmmod $drv"
-  fi
-  run "sudo modprobe dummy"
-  run "sudo ip link add wlan0 type dummy"
-  if [ -n "$drv" ]; then
-    run "sudo modprobe $drv"
-  fi
-fi
-
-# -------- Optional: Reset for cloned images -----------------------------------
-if $RUN_RESET_ID; then
-  LOG_TS; echo "Running machine reset for cloned images …"
-  run "rm -rf /opt/orbis_data/linux || true"
-  run "sudo systemctl stop systemd-networkd || true"
-  run "sudo rm -f /etc/machine-id"
-  run "sudo sh -c 'echo -n > /etc/machine-id'"
-  run "sudo systemd-machine-id-setup"
-  run "sudo rm -f /etc/ssh/ssh_host_*"
-  run "sudo dpkg-reconfigure -f noninteractive openssh-server"
-  run "sudo systemctl restart systemd-networkd || true"
-fi
-
-# -------- Packages -------------------------------------------------------------
-LOG_TS; echo "Installing system packages …"
-echo "iperf3 iperf3/start_daemon boolean false" | sudo debconf-set-selections
-export DEBIAN_FRONTEND=noninteractive
-run "sudo apt-get update -y"
-run "sudo apt-get install -y hostapd batctl wget curl rsync tcpdump"
-run "sudo apt-get install -y python3 python3-pam python3-pip pipx"
-run "sudo apt-get install -y aircrack-ng iperf3 network-manager dnsmasq python3-flask"
-
-run "sudo modprobe -v batman_adv"
-run "echo 'batman_adv' | sudo tee /etc/modules-load.d/batman_adv.conf >/dev/null"
-
-# -------- File copies ----------------------------------------------------------
-LOG_TS; echo "Copying configuration files from ${MOVE_SRC} …"
+# -------- File copies (required for both CONFIG_ONLY and full install) ----
+LOG_TS; echo "Setting up configuration files …"
 [ -d "${MOVE_SRC}" ] || die "Source not found: ${MOVE_SRC}"
 
 dst="/opt/orbis_data"
@@ -249,19 +219,80 @@ for d in interface network ogm scripts; do
   fi
 done
 
-# -------- Permissions ----------------------------------------------------------
-LOG_TS; echo "Setting permissions on user directories …"
+# -------- Permissions (required for both CONFIG_ONLY and full install) ----
+LOG_TS; echo "Setting permissions …"
 run "sudo find /opt/orbis_data -type d -exec chmod 755 {} \;"
 run "sudo chmod +x /opt/orbis_data/network/startup_sequence.sh"
 run "sudo chmod +x /opt/orbis_data/network/batmesh.sh"
 run "sudo chmod +x /opt/orbis_data/interface/start_monitor.sh"
 run "sudo chmod +x /opt/orbis_data/scripts/manage_wlan2.sh 2>/dev/null || true"
+run "sudo chmod +x /opt/orbis_data/scripts/manage_ap.sh 2>/dev/null || true"
 run "sudo chmod +x /opt/orbis_data/network/generate_networkd.sh 2>/dev/null || true"
-
-# per your requirement
 run "sudo chmod 0755 /opt/orbis_data/orbis.conf 2>/dev/null || true"
 
-# System directories
+# -------- Full installation tasks (only if not CONFIG_ONLY) --------
+if ! $CONFIG_ONLY; then
+sudocheck
+need bash
+need tee
+need awk
+need sed
+need grep
+need rsync
+command -v systemctl >/dev/null 2>&1 || true
+
+if [ "$(id -u)" -eq 0 ]; then
+  sudo=""
+else
+  sudo="sudo "
+fi
+
+LOG_TS; echo "Starting setup …"
+LOG_TS; echo "Options: reset-id=${RUN_RESET_ID}, pipx=${USE_PIPX}, reboot=${DO_REBOOT}, dry-run=${DRY_RUN}"
+
+# -------- wlan dummy logic (as in your original) ------------------------------
+#n_wlan=$(iw dev | grep "^[[:space:]]*Interface" | wc -l)
+#if [ "$n_wlan" -lt 2 ]; then
+#  drv=""
+#  if [ "$n_wlan" -eq 1 -a -e /sys/class/net/wlan0/device ]; then
+#    drv=$(basename "$(readlink -f "/sys/class/net/wlan0/device/driver/module")")
+#    read mac < /sys/class/net/wlan0/address
+#    echo "SUBSYSTEM==\"net\", ACTION==\"add\", ATTR{address}==\"${mac}\", NAME=\"wlan1\"" | sudo tee /etc/udev/rules.d/50-wlan1.rules > /dev/null
+#    run "sudo rmmod $drv"
+#  fi
+#  run "sudo modprobe dummy"
+#  run "sudo ip link add wlan0 type dummy"
+#  if [ -n "$drv" ]; then
+#    run "sudo modprobe $drv"
+#  fi
+#fi
+
+# -------- Optional: Reset for cloned images -----------------------------------
+if $RUN_RESET_ID; then
+  LOG_TS; echo "Running machine reset for cloned images …"
+  run "rm -rf /opt/orbis_data/linux || true"
+  run "sudo systemctl stop systemd-networkd || true"
+  run "sudo rm -f /etc/machine-id"
+  run "sudo sh -c 'echo -n > /etc/machine-id'"
+  run "sudo systemd-machine-id-setup"
+  run "sudo rm -f /etc/ssh/ssh_host_*"
+  run "sudo dpkg-reconfigure -f noninteractive openssh-server"
+  run "sudo systemctl restart systemd-networkd || true"
+fi
+
+# -------- Packages -------------------------------------------------------------
+LOG_TS; echo "Installing system packages …"
+echo "iperf3 iperf3/start_daemon boolean false" | sudo debconf-set-selections
+export DEBIAN_FRONTEND=noninteractive
+run "sudo apt-get update -y"
+run "sudo apt-get install -y hostapd batctl wget curl rsync tcpdump"
+run "sudo apt-get install -y python3 python3-pam python3-pip pipx"
+run "sudo apt-get install -y aircrack-ng iperf3 network-manager dnsmasq python3-flask"
+
+run "sudo modprobe -v batman_adv"
+run "echo 'batman_adv' | sudo tee /etc/modules-load.d/batman_adv.conf >/dev/null"
+
+# System directories (these are only needed for full installation)
 run "sudo install -d /etc/dnsmasq.d /etc/hostapd /etc/modprobe.d /etc/NetworkManager /etc/sudoers.d /etc/sysctl.d /etc/udev /etc/systemd/network /etc/systemd/system /etc/wpa_supplicant /usr/lib/systemd/system /usr/local/sbin"
 
 # Concrete copies (only if present)
@@ -277,6 +308,31 @@ for name in etc/dnsmasq.d etc/hostapd etc/modprobe.d etc/NetworkManager etc/sudo
   fi
 done
 
+# --- nftables mesh filter (prevent DHCP leakage into mesh via bat0) -----------
+# Installs /etc/nftables.d/mesh-filter.nft and ensures nftables.conf includes it.
+if test -f "${MOVE_SRC}/etc/nftables.d/mesh-filter.nft"; then
+  run "sudo install -d /etc/nftables.d"
+  run "sudo install -m 0644 -o root -g root \"${MOVE_SRC}/etc/nftables.d/mesh-filter.nft\" /etc/nftables.d/mesh-filter.nft"
+
+  # Ensure main config includes the mesh filter file (idempotent)
+  if test -f /etc/nftables.conf; then
+    run "sudo bash -c 'grep -qF \"include \\\"/etc/nftables.d/mesh-filter.nft\\\"\" /etc/nftables.conf || printf \"\n# OrbisMesh: bridge-layer DHCP leak protection\ninclude \\\"/etc/nftables.d/mesh-filter.nft\\\"\n\" >> /etc/nftables.conf'"
+  fi
+
+  # Apply rules now if nftables is available (best-effort, safe if service not present)
+  if command -v nft >/dev/null 2>&1; then
+    run "sudo systemctl enable --now nftables 2>/dev/null || true"
+    if test -f /etc/nftables.conf; then
+      run "sudo nft -f /etc/nftables.conf 2>/dev/null || true"
+    else
+      run "sudo nft -f /etc/nftables.d/mesh-filter.nft 2>/dev/null || true"
+    fi
+  fi
+else
+  LOG_TS; echo "Skipping: ${MOVE_SRC}/etc/nftables.d/mesh-filter.nft not found."
+fi
+
+
 run "sudo chmod +x /usr/local/sbin/orbis-apply-user-change.sh 2>/dev/null || true"
 
 # -------- Services/Daemons -----------------------------------------------------
@@ -288,6 +344,17 @@ run "sudo systemctl enable ap-powersave-off.service 2>/dev/null || true"
 run "sudo systemctl unmask hostapd || true"
 
 
+fi
+
+# -------- Optional OLED support (runs after base install, before network config) ---
+if ! $CONFIG_ONLY && $INSTALL_OLED; then
+  LOG_TS; echo "OLED option selected – running install_oled.sh before network configuration …"
+  OLED_SCRIPT="${SCRIPT_DIR}/installer_scripts/install_oled.sh"
+  if [ -f "$OLED_SCRIPT" ]; then
+    run "${sudo}bash \"$OLED_SCRIPT\""
+  else
+    LOG_TS; echo "WARNING: install_oled.sh not found at $OLED_SCRIPT – skipping OLED installation."
+  fi
 fi
 
 # -------- Interactive network config ------------------------------------------
@@ -441,6 +508,11 @@ conf_set() {
   ${sudo}python3 - "$file" "$key" "$val" <<'PY'
 import sys, re
 path, key, val = sys.argv[1], sys.argv[2], sys.argv[3]
+
+# Add quotes if value contains spaces and is not already quoted
+if ' ' in val and not (val.startswith('"') and val.endswith('"')):
+    val = f'"{val}"'
+
 with open(path, "r", encoding="utf-8") as f:
     lines = f.read().splitlines()
 
@@ -525,8 +597,8 @@ ui_ask_validated() {
   done
 }
 
-ui_set_wpa() {
-  # Usage: ui_set_wpa CONF_FILE
+ui_set_local_pw() {
+  # Usage: ui_set_local_pw CONF_FILE
   local file="$1"
   while true; do
     local p1 p2
@@ -548,21 +620,58 @@ ui_set_wpa() {
   done
 }
 
-root=""
+ui_set_mesh_pw() {
+  # Usage: ui_set_mesh_pw CONF_FILE
+  local file="$1"
+  while true; do
+    local p1 p2
+    p1="$(ui_passwordbox "Mesh SSID Password (leave empty to keep current value)")" || return 1
+    if [[ -z "${p1:-}" ]]; then
+      return 0
+    fi
+    p2="$(ui_passwordbox "Repeat Mesh SSID Password")" || return 1
+    if [[ "$p1" != "$p2" ]]; then
+      ui_msgbox "Error: Passwords do not match."
+      continue
+    fi
+    if [ "${#p1}" -lt 8 ] || [ "${#p1}" -gt 63 ]; then
+      ui_msgbox "Error: WPA password must be between 8 and 63 characters."
+      continue
+    fi
+    conf_set MESH_PASSWORD "$p1" "$file"
+    return 0
+  done
+}
 
 # --- orbis.conf config via raspi-config style menu ----------------------------
+echo ""
+echo "========== Starting Network Configuration Menu =========="
 CONF="${root}/opt/orbis_data/orbis.conf"
+echo "CONF file: $CONF"
 
 # Ensure config file exists (rsync should have copied it, but keep this safe)
 if [ ! -f "$CONF" ]; then
+  echo "CONF file not found, creating..."
   run "sudo install -m 0755 -o root -g root -T /dev/null \"$CONF\""
+  echo "CONF file created."
+else
+  echo "CONF file already exists: $CONF"
 fi
 
 ui_msgbox "BASIC NODE SETUP\n\nConfigure basic network settings.\n\nNavigate with arrow keys, Enter selects.\nChoose Finish to continue the installer."
 
+EXIT_TO_CONSOLE=false
+echo "Starting network configuration menu loop..."
+
 while true; do
+  cur_local_name="$(get_val NODE_NAME "$CONF")"; : "${cur_local_name:=Node 1}"
+  cur_local_id="$(get_val NODE_ID "$CONF")"; : "${cur_local_id:=1}"
   cur_local_ssid="$(get_val LOCAL_SSID "$CONF")"; : "${cur_local_ssid:=takNode1}"
-  cur_local_ch="$(get_val LOCAL_CH "$CONF")"; : "${cur_local_ch:=3}"
+  cur_local_band="$(get_val LOCAL_BAND "$CONF")"; : "${cur_local_band:=a}"
+  cur_local_ch="$(get_val LOCAL_CH "$CONF")"; : "${cur_local_ch:=36}"
+  cur_node_mesh_ssid="$(get_val MESH_SSID "$CONF")"; : "${cur_node_mesh_ssid:=orbis_mesh}"
+  cur_node_mesh_ch_01="$(get_val MESH_CH_01 "$CONF")"; : "${cur_node_mesh_ch_01:=11}"
+  cur_node_mesh_ch_02="$(get_val MESH_CH_02 "$CONF")"; : "${cur_node_mesh_ch_02:=36}"
   cur_node_ip="$(get_val NODE_IP "$CONF")"; : "${cur_node_ip:=192.168.200.10}"
   cur_node_cidr="$(get_val NODE_CIDR "$CONF")"; : "${cur_node_cidr:=24}"
   cur_dns="$(get_val DNS "$CONF")"; : "${cur_dns:=$cur_node_ip}"
@@ -571,94 +680,181 @@ while true; do
   cur_gw="$(get_val GATEWAY "$CONF")"; : "${cur_gw:=192.168.200.10}"
 
   choice="$(ui_menu "Select an option" "1" \
-    "1" "Local SSID            (${cur_local_ssid})" \
-    "2" "Local SSID Channel    (${cur_local_ch})" \
-    "3" "Local SSID Password   (hidden)" \
-    "4" "Node IP               (${cur_node_ip})" \
-    "5" "Node CIDR             (${cur_node_cidr})" \
-    "6" "DNS Server IP         (${cur_dns})" \
-    "7" "SSH IP                (${cur_ssh_ip})" \
-    "8" "SSH CIDR              (${cur_ssh_cidr})" \
-    "9" "Default Gateway IP    (${cur_gw})" \
+    "1" "Local Node Name                         [ ${cur_local_name} ]" \
+    "2" "Local Node ID                           [ ${cur_local_id} ]" \
+    "3" "Local SSID                              [ ${cur_local_ssid} ]" \
+    "4" "Local SSID Band (2.4GHz (g) | 5GHz (a)) [ ${cur_local_band} ]" \
+    "5" "Local SSID Channel                      [ ${cur_local_ch} ]" \
+    "6" "Local SSID Password                     [ hidden ]" \
+    "7" "Mesh SSID                               [ ${cur_node_mesh_ssid} ]" \
+    "8" "Mesh Channel 2.4GHz                     [ ${cur_node_mesh_ch_01} ]" \
+    "9" "Mesh Channel 5GHz                       [ ${cur_node_mesh_ch_02} ]" \
+    "10" "Mesh SSID Password                      [ hidden ]" \
+    "11" "Node Mesh IP                            [ ${cur_node_ip} ]" \
+    "12" "Node Mesh CIDR                          [ ${cur_node_cidr} ]" \
+    "13" "DNS Server IP                           [ ${cur_dns} ]" \
+    "14" "SSH IP                                  [ ${cur_ssh_ip} ]" \
+    "15" "SSH CIDR                                [ ${cur_ssh_cidr} ]" \
+    "16" "Default Gateway IP                      [ ${cur_gw} ]" \
     "F" "Finish and continue installer" \
+    "E" "Exit to console" \
   )" || choice="F"
 
   case "$choice" in
     1)
+      v="$(ui_ask_validated "Local Node Name" "$cur_local_name")" || continue
+      conf_set NODE_NAME "$v" "$CONF"
+      ;;
+    2)
+      v="$(ui_ask_validated "Local Node ID (number)" "$cur_local_id")" || continue
+      if ! printf '%s\n' "$v" | grep -Eq '^[0-9]+$'; then
+        ui_msgbox "Error: Node ID must be a number."
+        continue
+      fi
+      conf_set NODE_ID "$v" "$CONF"
+      ;;
+    3)
       v="$(ui_ask_validated "Local SSID" "$cur_local_ssid" ssid)" || continue
       conf_set LOCAL_SSID "$v" "$CONF"
       ;;
-    2)
-      v="$(ui_ask_validated "Local SSID Channel" "$cur_local_ch" ch)" || continue
-      conf_set LOCAL_CH "$v" "$CONF"
-      ;;
-    3)
-      ui_set_wpa "$CONF" || continue
-      ;;
     4)
-      v="$(ui_ask_validated "Node IP" "$cur_node_ip" ip)" || continue
-      conf_set NODE_IP "$v" "$CONF"
+      v="$(ui_ask_validated "Local SSID Band (2.4GHz (g) | 5GHz (a))" "$cur_local_band" )" || continue
+      if [[ "$v" != "a" && "$v" != "g" ]]; then
+        ui_msgbox "Error: Please enter 'a' for 5GHz or 'g' for 2.4GHz."
+        continue
+      fi
+      conf_set LOCAL_BAND "$v" "$CONF"
       ;;
     5)
+      v="$(ui_ask_validated "Local SSID Channel (2.4GHz: 1-11 | 5GHz: 36, 40, 44, 48, 52, 56, 60, 64)" "$cur_local_ch" ch)" || continue
+      conf_set LOCAL_CH "$v" "$CONF"
+      ;;
+    6)
+      ui_set_local_pw "$CONF" || continue
+      ;;
+    7)
+      v="$(ui_ask_validated "Mesh SSID" "$cur_node_mesh_ssid" ssid)" || continue
+      conf_set MESH_SSID "$v" "$CONF"
+      ;;
+    8)
+      v="$(ui_ask_validated "Mesh Channel 2.4GHz (1-11)" "$cur_node_mesh_ch_01" ch)" || continue
+      conf_set MESH_CH_01 "$v" "$CONF"
+      ;;
+    9)
+      v="$(ui_ask_validated "Mesh Channel 5GHz (36, 40, 44, 48, 52, 56, 60, 64)" "$cur_node_mesh_ch_02" ch)" || continue
+      conf_set MESH_CH_02 "$v" "$CONF"
+      ;;
+    10)
+      ui_set_mesh_pw "$CONF" || continue
+      ;;
+    11)
+      v="$(ui_ask_validated "Node Mesh IP" "$cur_node_ip" ip)" || continue
+      conf_set NODE_IP "$v" "$CONF"
+      ;;
+    12)
       v="$(ui_ask_validated "Node CIDR (0-32)" "$cur_node_cidr" cidr)" || continue
       conf_set NODE_CIDR "$v" "$CONF"
       ;;
-    6)
+    13)
       v="$(ui_ask_validated "Node DNS server IP (usually Node IP)" "$cur_dns" ip)" || continue
       conf_set DNS "$v" "$CONF"
       ;;
-    7)
+    14)
       v="$(ui_ask_validated "SSH IP" "$cur_ssh_ip" ip)" || continue
       conf_set SSH_IP "$v" "$CONF"
       ;;
-    8)
+    15)
       v="$(ui_ask_validated "SSH CIDR (0-32)" "$cur_ssh_cidr" cidr)" || continue
       conf_set SSH_CIDR "$v" "$CONF"
       ;;
-    9)
+    16)
       v="$(ui_ask_validated "Default Gateway IP" "$cur_gw" ip)" || continue
       conf_set GATEWAY "$v" "$CONF"
       ;;
     F|f)
       break
       ;;
+    E|e)
+      EXIT_TO_CONSOLE=true
+      break
+      ;;
   esac
 done
 
+echo ""
+echo "========== Exited Network Configuration Menu =========="
+echo "EXIT_TO_CONSOLE=$EXIT_TO_CONSOLE"
+echo ""
+
+# If the user requested exit, stop immediately without any further actions.
+if $EXIT_TO_CONSOLE; then
+  echo "User requested exit to console. Stopping."
+  ui_restore_tty
+  exit 0
+fi
+
 # Restore terminal immediately after leaving the ncurses UI to avoid flicker/artifacts
+echo ""
+echo "========== Restoring terminal after UI =========="
 ui_restore_tty
+echo "Terminal restored."
 
 # keep required permissions
+echo "Fixing config file permissions..."
 run "sudo chmod 0755 \"$CONF\""
 
 # Generate br0.network (and hostapd.conf, if generator was extended) from template + conf
+echo "Generating network configuration..."
 if [ -x "${root}/opt/orbis_data/network/generate_networkd.sh" ]; then
   run "sudo /opt/orbis_data/network/generate_networkd.sh"
 fi
 run "sudo systemctl enable orbis-networkd-generate.service"
 
-# -------- Show Log Summary -----------------------------------------------------
-echo
-echo "======================================================================"
-echo " LOG SUMMARY (Warnings & Errors)"
-echo "======================================================================"
-if [ -s "$LOG_FILE" ]; then
-  cat "$LOG_FILE"
-else
-  echo "No warnings or errors were recorded."
-fi
-echo "======================================================================"
-echo
+echo ""
+tty_println ""
+tty_println "=========================================="
+tty_println "STARTING POST-CONFIGURATION ACTIVATION"
+tty_println "=========================================="
+tty_println ""
 
-# -------- Finish/Reboot --------------------------------------------------------
-if $DO_REBOOT; then
-  if $DRY_RUN || confirm "Reboot now?"; then
-    LOG_TS; echo "Rebooting in 5s …"
-    $DRY_RUN || sleep 5
-    run "sudo reboot"
+echo "========== POST-CONFIGURATION ACTIVATION =========="
+LOG_TS; echo "Running post-configuration activation …"
+ACTIVATOR_SCRIPT="${SCRIPT_DIR}/installer_scripts/activator.sh"
+echo "ACTIVATOR_SCRIPT=$ACTIVATOR_SCRIPT"
+echo "SCRIPT_DIR=$SCRIPT_DIR"
+if [ -f "$ACTIVATOR_SCRIPT" ]; then
+  tty_println "Found activator.sh at: $ACTIVATOR_SCRIPT"
+  echo "Found activator.sh at: $ACTIVATOR_SCRIPT"
+  LOG_TS; echo "Executing: $ACTIVATOR_SCRIPT"
+  echo "Executing $ACTIVATOR_SCRIPT..."
+  bash "$ACTIVATOR_SCRIPT"
+  RESULT=$?
+  echo "activator.sh exit code: $RESULT"
+  if [ $RESULT -eq 0 ]; then
+    tty_println "✓ Post-configuration activation completed successfully."
+    LOG_TS; echo "Post-configuration activation completed."
+    echo "Post-configuration activation completed successfully."
   else
-    LOG_TS; echo "Reboot skipped."
+    tty_println "✗ Post-configuration activation failed with exit code: $RESULT"
+    LOG_TS; echo "Post-configuration activation failed with exit code: $RESULT"
+    echo "ERROR: Post-configuration activation failed with exit code: $RESULT"
   fi
 else
-  LOG_TS; echo "Setup finished – launch 'activator.sh' next!"
+  tty_println "✗ ERROR: activator.sh not found at $ACTIVATOR_SCRIPT"
+  tty_println "  Expected location: $ACTIVATOR_SCRIPT"
+  tty_println "  SCRIPT_DIR: $SCRIPT_DIR"
+  echo "ERROR: activator.sh not found at $ACTIVATOR_SCRIPT"
+  echo "Expected location: $ACTIVATOR_SCRIPT"
+  echo "SCRIPT_DIR: $SCRIPT_DIR"
+  LOG_TS; echo "WARNING: activator.sh not found at $ACTIVATOR_SCRIPT – skipping activation."
 fi
+
+tty_println ""
+tty_println "=========================================="
+tty_println "Installation complete."
+tty_println "=========================================="
+echo ""
+echo "=========================================="
+echo "Installation complete."
+echo "=========================================="
+exit 0

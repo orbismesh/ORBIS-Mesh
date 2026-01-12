@@ -1,0 +1,21 @@
+[Match]
+Name=br0
+
+[Network]
+# EUD / Mesh LAN
+Address=192.168.200.20/24
+
+# Management / SSH / Uplink
+Address=192.168.0.22/24
+
+# Default Route to Router-Net
+Gateway=192.168.200.10
+
+DNS=192.168.200.20
+
+IPForward=yes
+IPMasquerade=ipv4
+
+DHCP=no
+LinkLocalAddressing=no
+IPv6AcceptRA=no

@@ -1,37 +1,36 @@
 {
-  "timestamp": 1759785246,
+  "timestamp": 1768174946,
   "local": {
-    "mac": "da:b4:ea:10:06:4a",
-    "hostname": "pi01",
+    "mac": "24:ec:99:bf:c3:e9",
     "battery_present": false,
     "power_source": "unknown"
   },
   "nodes": {
-    "e8:ab:fa:0a:c2:8f": {
-      "last_seen": 0.912,
-      "throughput": 234.0,
-      "nexthop": "e8:ab:fa:0a:c2:8f",
-      "signal_dbm": 1.0,
-      "rx_packets": 55477,
-      "rx_drop_misc": 1972,
-      "tx_packets": 10581,
-      "tx_retries": 8096,
-      "tx_failed": 44,
-      "tx_bitrate_mbps": 24.0,
-      "rx_bitrate_mbps": 24.0
+    "24:ec:99:bf:c2:63": {
+      "last_seen": 0.832,
+      "throughput": 255.0,
+      "nexthop": "24:ec:99:bf:c2:63",
+      "signal_dbm": -31.0,
+      "rx_packets": 1347,
+      "rx_drop_misc": 1,
+      "tx_packets": 17,
+      "tx_retries": 0,
+      "tx_failed": 0,
+      "tx_bitrate_mbps": 54.0,
+      "rx_bitrate_mbps": 36.0
     },
-    "00:c1:51:11:05:f7": {
-      "last_seen": 0.396,
-      "throughput": 238.0,
-      "nexthop": "00:c1:51:11:05:f7",
-      "signal_dbm": 1.0,
-      "rx_packets": 53663,
-      "rx_drop_misc": 1733,
-      "tx_packets": 10212,
-      "tx_retries": 7884,
-      "tx_failed": 67,
-      "tx_bitrate_mbps": 11.0,
-      "rx_bitrate_mbps": 24.0
+    "24:ec:99:bf:cb:6f": {
+      "last_seen": 0.016,
+      "throughput": 228.0,
+      "nexthop": "24:ec:99:bf:cb:6f",
+      "signal_dbm": -34.0,
+      "rx_packets": 1424,
+      "rx_drop_misc": 1,
+      "tx_packets": 12,
+      "tx_retries": 0,
+      "tx_failed": 0,
+      "tx_bitrate_mbps": 48.0,
+      "rx_bitrate_mbps": 54.0
     }
   }
 }

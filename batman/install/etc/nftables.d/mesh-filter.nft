@@ -1,0 +1,14 @@
+# OrbisMesh: Prevent DHCPv4 leakage into the mesh backbone (bat0).
+# This filters bridged traffic at L2. DHCPv4 uses UDP ports 67/68.
+# The rules below guarantee that DHCP cannot traverse bat0 in either direction.
+
+table bridge mesh_filter {
+  chain forward {
+    type filter hook forward priority 0; policy accept;
+
+    iif "bat0" udp dport {67, 68} drop
+    oif "bat0" udp dport {67, 68} drop
+    iif "bat0" udp sport {67, 68} drop
+    oif "bat0" udp sport {67, 68} drop
+  }
+}
