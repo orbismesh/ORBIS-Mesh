@@ -1456,7 +1456,282 @@ def api_mesh_channels():
             "channels": channels,
             "current_frequency1": current_frequency1,
         }
-    )# -----------------------------------------------------------------------------
+    )
+
+
+@app.route("/api/band-scan")
+@login_required
+def api_band_scan():
+    """Scan all available bands on wlan1 and return channels sorted by quality.
+    
+    Returns channels organized by band (2.4GHz, 5GHz, 6GHz) with quality metrics.
+    Channels are sorted from best (lowest interference) to worst (highest interference).
+    """
+    ifname = "wlan1"
+    
+    # Check if wlan1 exists
+    if not _iface_exists(ifname):
+        return jsonify({"error": "Interface wlan1 not found"}), 404
+    
+    # Get the PHY for wlan1
+    wiphy = _get_wiphy_index(ifname)
+    if wiphy is None:
+        return jsonify({"error": "Could not determine PHY for wlan1"}), 500
+    
+    # Perform the scan
+    try:
+        # Check current interface mode
+        iw_info = subprocess.run(
+            ["iw", "dev", ifname, "info"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5
+        )
+        current_mode = "unknown"
+        if iw_info.returncode == 0:
+            for line in iw_info.stdout.splitlines():
+                if "type" in line.lower():
+                    current_mode = line.strip()
+                    break
+        
+        # Try scanning with the interface in its current mode first
+        scan_result = subprocess.run(
+            ["iw", "dev", ifname, "scan"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=30
+        )
+        
+        scan_stderr = scan_result.stderr
+        scan_stdout = scan_result.stdout
+        
+        # If scan failed and interface is in mesh mode, try passive scan or use different approach
+        if scan_result.returncode != 0:
+            # Try with "scan passive" for mesh interfaces
+            scan_result = subprocess.run(
+                ["iw", "dev", ifname, "scan", "passive"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=30
+            )
+            scan_stderr = scan_result.stderr
+            scan_stdout = scan_result.stdout
+            
+            if scan_result.returncode != 0:
+                return jsonify({
+                    "error": f"Scan failed: {scan_stderr}",
+                    "interface_mode": current_mode,
+                    "note": "Interface may be busy or in mesh mode. Try disabling mesh temporarily."
+                }), 500
+        
+        # Parse scan results
+        scan_output = scan_stdout
+        
+        # Dictionary to track channel usage and interference
+        # Key: frequency in MHz, Value: list of signal strengths
+        channel_usage = {}
+        
+        # Parse the scan output
+        current_bss = {}
+        for line in scan_output.splitlines():
+            line = line.strip()
+            
+            # New BSS entry
+            if line.startswith("BSS"):
+                if current_bss and "freq" in current_bss and "signal" in current_bss:
+                    freq = current_bss["freq"]
+                    signal = current_bss["signal"]
+                    if freq not in channel_usage:
+                        channel_usage[freq] = []
+                    channel_usage[freq].append(signal)
+                current_bss = {}
+            
+            # Frequency
+            elif line.startswith("freq:"):
+                try:
+                    freq_str = line.split(":", 1)[1].strip()
+                    # Handle frequencies like "2462.0" - convert to int MHz
+                    current_bss["freq"] = int(float(freq_str))
+                except (ValueError, IndexError):
+                    pass
+            
+            # Signal strength
+            elif line.startswith("signal:"):
+                try:
+                    # Format: "signal: -XX.00 dBm"
+                    signal_str = line.split(":", 1)[1].strip()
+                    signal_dbm = float(signal_str.split()[0])
+                    current_bss["signal"] = signal_dbm
+                except (ValueError, IndexError):
+                    pass
+        
+        # Don't forget the last BSS
+        if current_bss and "freq" in current_bss and "signal" in current_bss:
+            freq = current_bss["freq"]
+            signal = current_bss["signal"]
+            if freq not in channel_usage:
+                channel_usage[freq] = []
+            channel_usage[freq].append(signal)
+        
+        # Get all supported frequencies for this adapter
+        phy_result = subprocess.run(
+            ["iw", "phy", f"phy{wiphy}", "info"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5
+        )
+        
+        if phy_result.returncode != 0:
+            return jsonify({"error": "Could not get PHY info"}), 500
+        
+        supported_freqs = _parse_phy_frequencies_mhz(phy_result.stdout)
+        
+        # Create channel list with quality scores
+        channels_by_band = {
+            "2.4GHz": [],
+            "5GHz": [],
+            "6GHz": []
+        }
+        
+        # Map frequency to channel number
+        freq_to_channel = {}
+        for band, channels_map in RF_CHANNEL_DB.items():
+            for ch, freq in channels_map.items():
+                freq_to_channel[int(freq)] = {"channel": ch, "band": band}
+        
+        # Helper function to calculate channel overlap interference
+        def calculate_interference(target_freq, band_name):
+            """Calculate interference for a given frequency considering channel overlap.
+            
+            For 2.4GHz: Channels overlap ±20-25 MHz (about 4-5 channels)
+            For 5GHz: Channels are usually non-overlapping (20 MHz apart)
+            """
+            interfering_signals = []
+            
+            if band_name == "2.4GHz":
+                # 2.4GHz channels overlap significantly
+                # Each channel is 5 MHz apart but has 22 MHz bandwidth
+                # So channels within ±25 MHz can cause interference
+                overlap_range = 25
+            elif band_name == "5GHz":
+                # 5GHz channels are typically 20 MHz wide and non-overlapping
+                # But adjacent channels can still cause some interference
+                overlap_range = 20
+            else:  # 6GHz
+                overlap_range = 20
+            
+            for detected_freq, signals in channel_usage.items():
+                freq_diff = abs(detected_freq - target_freq)
+                
+                if freq_diff <= overlap_range:
+                    # Calculate interference factor based on distance
+                    if freq_diff == 0:
+                        # Same channel - full interference
+                        interference_factor = 1.0
+                    else:
+                        # Adjacent/overlapping channel - reduced interference
+                        # Linear falloff based on frequency distance
+                        interference_factor = 1.0 - (freq_diff / overlap_range)
+                    
+                    # Add weighted signals
+                    for signal in signals:
+                        interfering_signals.append((signal, interference_factor))
+            
+            return interfering_signals
+        
+        for freq in supported_freqs:
+            if freq not in freq_to_channel:
+                continue
+            
+            channel_info = freq_to_channel[freq]
+            channel = channel_info["channel"]
+            band = channel_info["band"]
+            
+            # Calculate interference from all nearby channels
+            interfering_signals = calculate_interference(freq, band)
+            
+            # Calculate quality score
+            # Lower is better (less interference)
+            if interfering_signals:
+                # Calculate weighted interference
+                total_interference = 0
+                total_weight = 0
+                network_count = 0
+                
+                for signal_dbm, weight in interfering_signals:
+                    # Convert dBm to a linear scale for better perception
+                    # Stronger signals (less negative) are worse
+                    # -30 dBm is very strong (bad), -90 dBm is very weak (good)
+                    interference_value = (100 + signal_dbm) * weight  # Scale to 0-100 range
+                    total_interference += interference_value
+                    total_weight += weight
+                    network_count += weight  # Count fractional networks based on interference
+                
+                # Average signal strength for display
+                avg_signal = sum(s for s, w in interfering_signals) / len(interfering_signals)
+                
+                # Quality score: weighted sum of interference
+                # Network count contributes significantly
+                # Signal strength contributes to overall interference
+                quality_score = (network_count * 15) + total_interference
+                network_count = int(round(network_count))  # Round for display
+            else:
+                # No networks detected - perfect!
+                quality_score = 0
+                avg_signal = None
+                network_count = 0
+            
+            channel_data = {
+                "channel": channel,
+                "frequency": freq,
+                "quality_score": round(quality_score, 2),
+                "networks": network_count,
+                "avg_signal": round(avg_signal, 2) if avg_signal is not None else None
+            }
+            
+            if band in channels_by_band:
+                channels_by_band[band].append(channel_data)
+        
+        # Sort channels by quality (best first)
+        for band in channels_by_band:
+            channels_by_band[band].sort(key=lambda x: x["quality_score"])
+        
+        # Add debug information about detected networks
+        detected_networks = []
+        for freq, signals in channel_usage.items():
+            if freq in freq_to_channel:
+                ch_info = freq_to_channel[freq]
+                detected_networks.append({
+                    "channel": ch_info["channel"],
+                    "frequency": freq,
+                    "band": ch_info["band"],
+                    "count": len(signals),
+                    "signals": [round(s, 1) for s in signals]
+                })
+        detected_networks.sort(key=lambda x: (x["band"], x["channel"]))
+        
+        return jsonify({
+            "ifname": ifname,
+            "bands": channels_by_band,
+            "scan_time": datetime.now().isoformat(),
+            "detected_networks": detected_networks,
+            "total_networks_found": sum(len(signals) for signals in channel_usage.values()),
+            "interface_mode": current_mode,
+            "raw_scan_output": scan_stdout[:2000] if scan_stdout else "No output"  # First 2000 chars for debugging
+        })
+        
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Scan timeout - operation took too long"}), 500
+    except Exception as e:
+        import traceback
+        return jsonify({"error": f"Scan failed: {str(e)}", "traceback": traceback.format_exc()}), 500
+
+
+# -----------------------------------------------------------------------------
 # Website Routes
 # -----------------------------------------------------------------------------
 

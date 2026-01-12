@@ -312,6 +312,215 @@
         </form>
     </article>
 
+    <article class="card">
+        <h2 class="card-title">Mesh Band Scan</h2>
+        <div class="form-actions">
+            <button type="button" id="scanNowBtn" class="btn-primary">Scan Now</button>
+        </div>
+        
+        <div id="scanStatus" style="margin-top: 1rem; display: none;">
+            <p style="color: var(--text-muted);">Scanning... This may take up to 30 seconds.</p>
+        </div>
+        
+        <div id="scanResults" style="margin-top: 1rem; display: none;">
+            <h3 style="margin-bottom: 0.5rem;">Scan Results</h3>
+            <p id="scanTime" style="color: var(--text-muted); font-size: 0.9rem;"></p>
+            <p id="scanSummary" style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;"></p>
+            
+            <details style="margin-bottom: 1rem; padding: 0.5rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 4px;">
+                <summary style="cursor: pointer; font-weight: bold; padding: 0.25rem;">Debug: Detected Networks</summary>
+                <div id="debugInfo" style="margin-top: 0.5rem; font-family: monospace; font-size: 0.85rem; max-height: 200px; overflow-y: auto;"></div>
+            </details>
+            
+            <details style="margin-bottom: 1rem; padding: 0.5rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 4px;">
+                <summary style="cursor: pointer; font-weight: bold; padding: 0.25rem;">Debug: Raw Scan Output</summary>
+                <div id="rawScanOutput" style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; background: #1e1e1e; color: #d4d4d4; padding: 0.5rem; border-radius: 4px;"></div>
+            </details>
+            
+            <div id="band24ghz" style="margin-bottom: 1.5rem;">
+                <h4 style="margin-bottom: 0.5rem;">2.4 GHz Band</h4>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">Note: 2.4 GHz channels overlap. Channels 1, 6, and 11 are non-overlapping.</p>
+                <div id="channels24ghz" style="font-family: monospace; font-size: 0.9rem;"></div>
+            </div>
+            
+            <div id="band5ghz" style="margin-bottom: 1.5rem;">
+                <h4 style="margin-bottom: 0.5rem;">5 GHz Band</h4>
+                <div id="channels5ghz" style="font-family: monospace; font-size: 0.9rem;"></div>
+            </div>
+            
+            <div id="band6ghz" style="margin-bottom: 1.5rem; display: none;">
+                <h4 style="margin-bottom: 0.5rem;">6 GHz Band</h4>
+                <div id="channels6ghz" style="font-family: monospace; font-size: 0.9rem;"></div>
+            </div>
+        </div>
+        
+        <div id="scanError" style="margin-top: 1rem; display: none; color: var(--error-color);">
+            <p id="errorMessage"></p>
+        </div>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const scanBtn = document.getElementById('scanNowBtn');
+                const scanStatus = document.getElementById('scanStatus');
+                const scanResults = document.getElementById('scanResults');
+                const scanError = document.getElementById('scanError');
+                const scanTime = document.getElementById('scanTime');
+                const scanSummary = document.getElementById('scanSummary');
+                const debugInfo = document.getElementById('debugInfo');
+                const rawScanOutput = document.getElementById('rawScanOutput');
+                const channels24ghz = document.getElementById('channels24ghz');
+                const channels5ghz = document.getElementById('channels5ghz');
+                const channels6ghz = document.getElementById('channels6ghz');
+                const band6ghz = document.getElementById('band6ghz');
+                const errorMessage = document.getElementById('errorMessage');
+
+                function getQualityColor(score) {
+                    if (score === 0) return '#28a745'; // Green - excellent
+                    if (score < 30) return '#90EE90'; // Light green - very good
+                    if (score < 60) return '#ffc107'; // Yellow - good
+                    if (score < 100) return '#fd7e14'; // Orange - fair
+                    return '#dc3545'; // Red - poor
+                }
+
+                function getQualityLabel(score) {
+                    if (score === 0) return 'Excellent';
+                    if (score < 30) return 'Very Good';
+                    if (score < 60) return 'Good';
+                    if (score < 100) return 'Fair';
+                    return 'Poor';
+                }
+
+                function formatChannelList(channels) {
+                    if (!channels || channels.length === 0) {
+                        return '<p style="color: var(--text-muted);">No channels available</p>';
+                    }
+
+                    let html = '<table style="width: 100%; border-collapse: collapse;">';
+                    html += '<thead><tr style="border-bottom: 1px solid var(--border-color);">';
+                    html += '<th style="text-align: left; padding: 0.5rem;">CH</th>';
+                    html += '<th style="text-align: left; padding: 0.5rem;">FRQ</th>';
+                    html += '<th style="text-align: left; padding: 0.5rem;">Quality</th>';
+                    html += '<th style="text-align: left; padding: 0.5rem;">Networks</th>';
+                    html += '<th style="text-align: left; padding: 0.5rem;">Avg Signal</th>';
+                    html += '</tr></thead><tbody>';
+
+                    channels.forEach(function(ch) {
+                        const color = getQualityColor(ch.quality_score);
+                        const label = getQualityLabel(ch.quality_score);
+                        const signal = ch.avg_signal !== null ? ch.avg_signal + ' dBm' : 'N/A';
+                        
+                        html += '<tr style="border-bottom: 1px solid var(--border-color);">';
+                        html += '<td style="padding: 0.5rem; font-weight: bold;">' + ch.channel + '</td>';
+                        html += '<td style="padding: 0.5rem;">' + ch.frequency + ' MHz</td>';
+                        html += '<td style="padding: 0.5rem;"><span style="color: ' + color + '; font-weight: bold;">● </span>' + label + '</td>';
+                        html += '<td style="padding: 0.5rem;">' + ch.networks + '</td>';
+                        html += '<td style="padding: 0.5rem;">' + signal + '</td>';
+                        html += '</tr>';
+                    });
+
+                    html += '</tbody></table>';
+                    return html;
+                }
+
+                scanBtn.addEventListener('click', async function() {
+                    // Hide previous results and errors
+                    scanResults.style.display = 'none';
+                    scanError.style.display = 'none';
+                    
+                    // Show scanning status
+                    scanStatus.style.display = 'block';
+                    scanBtn.disabled = true;
+                    scanBtn.textContent = 'Scanning...';
+
+                    try {
+                        const response = await fetch('/api/band-scan', {
+                            credentials: 'same-origin'
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(data.error || 'Scan failed');
+                        }
+
+                        // Hide scanning status
+                        scanStatus.style.display = 'none';
+
+                        // Format scan time
+                        const scanDate = new Date(data.scan_time);
+                        scanTime.textContent = 'Scanned at: ' + scanDate.toLocaleString();
+                        
+                        // Show summary
+                        scanSummary.textContent = 'Found ' + data.total_networks_found + ' networks in total';
+                        if (data.interface_mode) {
+                            scanSummary.textContent += ' | Interface mode: ' + data.interface_mode;
+                        }
+                        
+                        // Show raw scan output
+                        if (data.raw_scan_output) {
+                            rawScanOutput.textContent = data.raw_scan_output;
+                        } else {
+                            rawScanOutput.textContent = 'No raw output available';
+                        }
+                        
+                        // Show debug info
+                        if (data.detected_networks && data.detected_networks.length > 0) {
+                            let debugHtml = '<table style="width: 100%; font-size: 0.85rem;"><thead><tr>';
+                            debugHtml += '<th style="text-align: left; padding: 0.25rem;">Band</th>';
+                            debugHtml += '<th style="text-align: left; padding: 0.25rem;">CH</th>';
+                            debugHtml += '<th style="text-align: left; padding: 0.25rem;">Freq</th>';
+                            debugHtml += '<th style="text-align: left; padding: 0.25rem;">Count</th>';
+                            debugHtml += '<th style="text-align: left; padding: 0.25rem;">Signals (dBm)</th>';
+                            debugHtml += '</tr></thead><tbody>';
+                            
+                            data.detected_networks.forEach(function(net) {
+                                debugHtml += '<tr>';
+                                debugHtml += '<td style="padding: 0.25rem;">' + net.band + '</td>';
+                                debugHtml += '<td style="padding: 0.25rem;">' + net.channel + '</td>';
+                                debugHtml += '<td style="padding: 0.25rem;">' + net.frequency + '</td>';
+                                debugHtml += '<td style="padding: 0.25rem;">' + net.count + '</td>';
+                                debugHtml += '<td style="padding: 0.25rem;">' + net.signals.join(', ') + '</td>';
+                                debugHtml += '</tr>';
+                            });
+                            
+                            debugHtml += '</tbody></table>';
+                            debugInfo.innerHTML = debugHtml;
+                        } else {
+                            debugInfo.innerHTML = '<p>No networks detected</p>';
+                        }
+
+                        // Display results for each band
+                        channels24ghz.innerHTML = formatChannelList(data.bands['2.4GHz']);
+                        channels5ghz.innerHTML = formatChannelList(data.bands['5GHz']);
+                        
+                        // Show 6GHz band only if channels are available
+                        if (data.bands['6GHz'] && data.bands['6GHz'].length > 0) {
+                            channels6ghz.innerHTML = formatChannelList(data.bands['6GHz']);
+                            band6ghz.style.display = 'block';
+                        } else {
+                            band6ghz.style.display = 'none';
+                        }
+
+                        // Show results
+                        scanResults.style.display = 'block';
+
+                    } catch (error) {
+                        // Hide scanning status
+                        scanStatus.style.display = 'none';
+                        
+                        // Show error
+                        errorMessage.textContent = 'Error: ' + error.message;
+                        scanError.style.display = 'block';
+                    } finally {
+                        scanBtn.disabled = false;
+                        scanBtn.textContent = 'Scan Now';
+                    }
+                });
+            });
+        </script>
+    </article>
+
 </section>
 
 {% endblock %}
+
